@@ -130,6 +130,7 @@ async function uploadFile(file) {
 
 async function startDub() {
   if (!currentJob) return;
+  $("start").disabled = true;
   const body = {
     source_lang: $("source_lang").value,
     target_lang: $("target_lang").value,
@@ -151,6 +152,7 @@ async function startDub() {
     $("file").value = "";
     refresh();
   } catch (e) {
+    $("start").disabled = false;
     _setPicked("Chyba spojení: " + e, true);
   }
 }
