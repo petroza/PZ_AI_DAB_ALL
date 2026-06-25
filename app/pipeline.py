@@ -32,7 +32,7 @@ def run_dub(jobs, job_id: str) -> None:
         return
 
     def log(msg: str) -> None:
-        jobs.append_log(jobs.get(job_id), msg)
+        jobs.append_log(job, msg)
 
     def prog(status, pct):
         jobs.set_status(job_id, status, int(pct))
