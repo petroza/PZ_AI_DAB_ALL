@@ -23,9 +23,14 @@ def _rubberband(src: Path, out: Path, ratio: float, log=None) -> None:
            str(src), str(out)]
     ff._log(log, "RUBBERBAND: " + " ".join(cmd))
     import subprocess
-    proc = subprocess.run(cmd, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=300,
-                          **ff._popen_kwargs())
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=300,
+                              **ff._popen_kwargs())
+    except FileNotFoundError:
+        raise ff.DubError(f"rubberband binárka nenalezena: {exe}")
+    except subprocess.TimeoutExpired:
+        raise ff.DubError("rubberband překročil timeout (300 s).")
     if proc.returncode != 0 or not out.is_file() or out.stat().st_size == 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-10:]
         ff._log(log, "RUBBERBAND chyba:\n" + "\n".join(tail))
