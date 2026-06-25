@@ -73,6 +73,47 @@
   <pre id="logtext"></pre>
 </div>
 
+<div id="aebox" class="aebox hidden">
+  <div class="logbar">
+    <span>After Effects · <span id="ae-jobname"></span></span>
+    <button id="aeclose">✕</button>
+  </div>
+  <div class="aebody">
+    <div class="aegrid">
+      <label>Velikost písma (px)
+        <input id="ae-fontsize" type="number" value="80" min="8" max="400">
+      </label>
+      <label>Znaky na řádek
+        <input id="ae-perline" type="number" value="40" min="10" max="120">
+      </label>
+      <label>Rozlišení kompozice
+        <select id="ae-res">
+          <option value="1920x1080" selected>1920×1080 — Full HD</option>
+          <option value="3840x2160">3840×2160 — 4K UHD</option>
+          <option value="1280x720">1280×720 — HD</option>
+          <option value="1080x1920">1080×1920 — 9:16 (Reels / TikTok)</option>
+          <option value="1080x1080">1080×1080 — čtverec</option>
+        </select>
+      </label>
+      <label>Snímkový kmitočet
+        <select id="ae-fps">
+          <option value="25" selected>25 fps (PAL / EU)</option>
+          <option value="24">24 fps (film)</option>
+          <option value="23.976">23.976 fps</option>
+          <option value="30">30 fps</option>
+          <option value="29.97">29.97 fps</option>
+          <option value="50">50 fps</option>
+          <option value="60">60 fps</option>
+        </select>
+      </label>
+      <label>Svislá pozice (% výšky)
+        <input id="ae-posy" type="number" value="88" min="0" max="100">
+      </label>
+    </div>
+    <button id="ae-dl" class="go" style="margin-top:4px">⬇ Stáhnout .jsx skript pro After Effects</button>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

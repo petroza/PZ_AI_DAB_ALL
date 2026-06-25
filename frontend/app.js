@@ -90,6 +90,96 @@ function dl(id, kind, label) {
   return `<a class="dlbtn" href="/api/download/${id}/${kind}">${label}</a>`;
 }
 
+// --- After Effects export -------------------------------------------------
+let _aeJobId = null, _aeFilename = "";
+
+function showAeModal(id, filename) {
+  _aeJobId = id; _aeFilename = filename;
+  $("ae-jobname").textContent = filename;
+  $("aebox").classList.remove("hidden");
+}
+function _aeChunkLines(text, perLine, maxLines) {
+  const words = (text || "").trim().split(/\s+/);
+  const lines = []; let line = "";
+  for (const w of words) {
+    const cand = line ? line + " " + w : w;
+    if (cand.length <= perLine) { line = cand; }
+    else { if (line) lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  if (maxLines > 0) lines.length = Math.min(lines.length, maxLines);
+  return lines.join("\r");
+}
+function _aeBuildJsx(segments, { fontSize, perLine, compW, compH, fps, posYpct }) {
+  const subs = segments
+    .map(s => ({ t: _aeChunkLines(s.text, perLine, 2),
+                 s: +((s.start || 0).toFixed(3)),
+                 e: +((s.end   || 0).toFixed(3)) }))
+    .filter(s => s.t);
+  if (!subs.length) return null;
+  const strokeW = Math.max(1, Math.round(fontSize / 40));
+  return `// PZ AI DAB ALL — After Effects titulky
+// Spusť: File > Scripts > Run Script File…
+(function () {
+  var SUBS = ${JSON.stringify(subs)};
+  var FONT_SIZE = ${fontSize};
+  var COMP_W = ${compW}; var COMP_H = ${compH};
+  var FPS = ${fps}; var POS_Y_PCT = ${posYpct};
+  var comp = app.project.activeItem;
+  if (!comp || !(comp instanceof CompItem)) {
+    var dur = SUBS[SUBS.length - 1].e + 1;
+    comp = app.project.items.addComp("Titulky", COMP_W, COMP_H, 1, dur, FPS);
+  }
+  app.beginUndoGroup("Přidat titulky — PZ AI DAB ALL");
+  for (var i = 0; i < SUBS.length; i++) {
+    var sub = SUBS[i]; if (!sub.t) continue;
+    var layer = comp.layers.addText(sub.t);
+    layer.name = "Titulek " + (i + 1);
+    layer.inPoint = sub.s; layer.outPoint = sub.e;
+    var src = layer.property("Source Text"); var doc = src.value;
+    doc.resetCharStyle();
+    doc.fontSize = FONT_SIZE; doc.fillColor = [1,1,1];
+    doc.strokeColor = [0,0,0]; doc.strokeWidth = ${strokeW};
+    doc.strokeOverFill = false; doc.applyStroke = true;
+    doc.justification = ParagraphJustification.CENTER_JUSTIFY;
+    src.setValue(doc);
+    layer.property("Transform").property("Position")
+        .setValue([COMP_W / 2, COMP_H * (POS_Y_PCT / 100)]);
+  }
+  app.endUndoGroup();
+  alert("Hotovo! Přidáno " + SUBS.length + " titulků.");
+}());
+`;
+}
+async function _aeDownload() {
+  const btn = $("ae-dl");
+  btn.disabled = true; btn.textContent = "Načítám titulky…";
+  try {
+    const r = await fetch("/api/download/" + _aeJobId + "/json");
+    if (!r.ok) throw new Error("JSON nedostupný");
+    const data = await r.json();
+    const segs = data.segments || [];
+    if (!segs.length) { alert("Žádné segmenty k exportu."); return; }
+    const [compW, compH] = $("ae-res").value.split("x").map(Number);
+    const jsx = _aeBuildJsx(segs, {
+      fontSize: parseInt($("ae-fontsize").value) || 80,
+      perLine:  parseInt($("ae-perline").value)  || 40,
+      compW, compH,
+      fps:     parseFloat($("ae-fps").value) || 25,
+      posYpct: parseInt($("ae-posy").value)  || 88,
+    });
+    if (!jsx) { alert("Nepodařilo se vygenerovat skript."); return; }
+    const blob = new Blob([jsx], { type: "application/octet-stream" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (_aeFilename.replace(/\.[^.]+$/, "") || "titulky") + "_AE.jsx";
+    a.click(); URL.revokeObjectURL(a.href);
+    $("aebox").classList.add("hidden");
+  } catch (e) { alert("Chyba: " + e); }
+  finally { btn.disabled = false; btn.textContent = "⬇ Stáhnout .jsx skript pro After Effects"; }
+}
+window.showAeModal = showAeModal;
+
 function jobCard(j) {
   const st = STATUS[j.status] || j.status;
   const running = !["done", "error"].includes(j.status);
@@ -99,6 +189,7 @@ function jobCard(j) {
     if (j.output_audio) outs += dl(j.id, "audio", "⬇ Audio");
     if (j.output_srt_tgt) outs += dl(j.id, "srt_tgt", "⬇ Titulky (cíl)");
     if (j.output_srt_src) outs += dl(j.id, "srt_src", "⬇ Titulky (zdroj)");
+    if (j.output_json) outs += `<button class="dlbtn" onclick="showAeModal('${j.id}','${j.filename.replace(/'/g,"\\'")}')">⬇ After Effects (.jsx)</button>`;
   }
   const err = j.error ? `<div class="err">${j.error}</div>` : "";
   const dir = (LANG[j.source_lang] || j.source_lang) + " → " + (LANG[j.target_lang] || j.target_lang);
@@ -151,6 +242,8 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
 $("logclose").addEventListener("click", () => $("logbox").classList.add("hidden"));
+$("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
+$("ae-dl").addEventListener("click", _aeDownload);
 
 loadStatus();
 refresh();
