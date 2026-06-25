@@ -137,8 +137,6 @@ def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job nenalezen.")
-    if job.status not in ("queued", "done", "error"):
-        raise HTTPException(409, "Job už běží.")
     if not job.upload_path or not Path(job.upload_path).is_file():
         raise HTTPException(400, "Chybí nahraný soubor pro tento job.")
 
@@ -151,8 +149,8 @@ def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
             v = getattr(req, k)
             if v is not None:
                 upd[k] = v
-    jobs.update(job_id, **upd)
-    jobs.set_status(job_id, "queued", 2)
+    if not jobs.try_queue(job_id, **upd):
+        raise HTTPException(409, "Job už běží.")
     threading.Thread(target=pipeline.run_dub, args=(jobs, job_id),
                      daemon=True).start()
     return {"job_id": job_id, "status": "started"}

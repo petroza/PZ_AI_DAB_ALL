@@ -450,6 +450,7 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
     _log(log, f"FFMPEG burn-in (cwd={work_dir}): " + " ".join(cmd))
 
     err_path = output_path.with_suffix(".tmp.err")
+    err = ""
     rc = 1
     stalled = {"v": False}
     proc = None
@@ -489,8 +490,13 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
                         progress_cb(pct)
             proc.wait()
             rc = proc.returncode
+        # errf is closed here; read stderr before finally cleanup
+        try:
+            err = err_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     finally:
-        for p in (tmp_ass,):
+        for p in (tmp_ass, err_path):
             try:
                 p.unlink(missing_ok=True)
             except Exception:
@@ -498,13 +504,6 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
 
     if stalled["v"]:
         raise FfmpegError("ffmpeg zapékání se zaseklo (10 min bez postupu) – ukončeno.")
-
-    err = ""
-    try:
-        err = err_path.read_text(encoding="utf-8", errors="replace")
-        err_path.unlink(missing_ok=True)
-    except Exception:
-        pass
 
     if rc != 0:
         tail = (err or "").strip().splitlines()[-20:]

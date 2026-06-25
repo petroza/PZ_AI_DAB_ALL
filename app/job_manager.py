@@ -142,6 +142,33 @@ class JobManager:
             fields["finished_at"] = _now()
         return self.update(job_id, **fields)
 
+    def try_queue(self, job_id: str, **fields) -> bool:
+        """Atomically check that the job is startable and mark it as queued.
+
+        Returns True if the job was successfully transitioned to 'queued'.
+        Returns False if the job is already running (or doesn't exist),
+        preventing a duplicate pipeline start under concurrent requests.
+
+        A fresh "queued" job (started_at=None, never dispatched) is startable.
+        A "queued" job with started_at already set means a pipeline was already
+        dispatched for it — block to prevent double-start.
+        """
+        with self._lock:
+            job = self.get(job_id)
+            if not job:
+                return False
+            if job.status == "queued" and job.started_at is not None:
+                return False
+            if job.status not in ("queued", "done", "error"):
+                return False
+            for k, v in fields.items():
+                if hasattr(job, k):
+                    setattr(job, k, v)
+            job.status = "queued"
+            job.progress = 2
+            self.save(job)
+            return True
+
     def list(self) -> List[dict]:
         with self._lock:
             jobs: List[dict] = []

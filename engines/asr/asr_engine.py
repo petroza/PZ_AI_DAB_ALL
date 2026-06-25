@@ -293,7 +293,9 @@ def _apply_corrections(text: str, rules) -> str:
 
 _LANG_LOC = {
     "cs-CZ": "češtině", "en-US": "angličtině", "uk-UA": "ukrajinštině",
-    "ru-RU": "ruštině", "auto": None,
+    "ru-RU": "ruštině", "de-DE": "němčině", "pl-PL": "polštině",
+    "sk-SK": "slovenštině", "es-ES": "španělštině", "fr-FR": "francouzštině",
+    "it-IT": "italštině", "auto": None,
 }
 
 
@@ -458,7 +460,14 @@ def _llm_correct_text(text: str, lang: Optional[str] = None) -> str:
         return text
     if len(text) <= 1200:
         return _llm_correct_chunk(text, lang)
-    sents = re.findall(r"[^.!?…]*[.!?…]", text) or [text]
+    sents = re.findall(r"[^.!?…]*[.!?…]", text)
+    if not sents:
+        sents = [text]
+    else:
+        # Capture any trailing text that ends without a punctuation mark
+        tail = text[sum(len(s) for s in sents):]
+        if tail.strip():
+            sents.append(tail)
     chunks, cur = [], ""
     for s in sents:
         if cur and len(cur) + len(s) > 1200:

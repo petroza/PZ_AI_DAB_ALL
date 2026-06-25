@@ -107,7 +107,8 @@ def _synth_pip(text: str, out_wav: Path, model: Path,
             _piper_cache[cache_key] = PiperVoice.load(
                 str(model), config_path=str(cfg) if cfg.is_file() else None)
         else:
-            _log(log, f"PIPER (pip): model={model.name} (cache), length_scale={1.0/speed:.3f}")
+            ls = (1.0 / speed) if (speed and speed > 0) else 1.0
+            _log(log, f"PIPER (pip): model={model.name} (cache), length_scale={ls:.3f}")
     pv = _piper_cache[cache_key]
     length_scale = (1.0 / speed) if speed and speed > 0 else 1.0
     with wave.open(str(out_wav), "wb") as wf:
