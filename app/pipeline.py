@@ -118,6 +118,7 @@ def run_dub(jobs, job_id: str) -> None:
             raise TTSNotReady(info)
         log(f"TTS backend: {backend.name} ({info})")
         clips = []
+        n_tts = len(out_segs) or 1
         for i, s in enumerate(out_segs):
             text = (s["text"] or "").strip()
             c = VoiceClip(index=i, start=float(s["start"] or 0.0),
@@ -128,7 +129,7 @@ def run_dub(jobs, job_id: str) -> None:
                 c.raw_wav = str(raw)
                 c.natural_dur = ff.duration(raw)
             clips.append(c)
-            prog("synthesizing", 58 + (i + 1) / n * 18)
+            prog("synthesizing", 58 + (i + 1) / n_tts * 18)
 
         # 5) zarovnání klipů na délku slotů
         prog("aligning", 80)

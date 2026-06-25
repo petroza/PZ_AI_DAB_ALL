@@ -431,7 +431,10 @@ async function showLog(id, name) {
 
 async function delJob(id) {
   if (!confirm("Opravdu smazat tuto zakázku?")) return;
-  await fetch("/api/jobs/" + id, { method: "DELETE" });
+  try {
+    const r = await fetch("/api/jobs/" + id, { method: "DELETE" });
+    if (!r.ok) { alert("Smazání selhalo (" + r.status + ")."); return; }
+  } catch (e) { alert("Chyba spojení: " + e); return; }
   refresh();
 }
 
