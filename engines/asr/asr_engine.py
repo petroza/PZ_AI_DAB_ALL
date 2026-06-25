@@ -326,20 +326,28 @@ _ARGOS_LANG: dict = {
 }
 
 
+_ARGOS_READY: set = set()   # nainstalované páry (src, tgt); vyhne se opakování
+
+
 def _argos_ensure_pair(src: str, tgt: str) -> bool:
     """Zajistí nainstalovaný argostranslate balíček pro pár src→tgt."""
+    key = (src, tgt)
+    if key in _ARGOS_READY:
+        return True
     try:
         import argostranslate.package as pkg
         import argostranslate.translate as tr
         for lang in tr.get_installed_languages():
             if lang.code == src:
                 if any(t.to_lang.code == tgt for t in lang.translations_to):
+                    _ARGOS_READY.add(key)
                     return True
         pkg.update_package_index()
         avail = pkg.get_available_packages()
         p = next((x for x in avail if x.from_code == src and x.to_code == tgt), None)
         if p:
             pkg.install_from_path(p.download())
+            _ARGOS_READY.add(key)
             return True
     except Exception:
         pass

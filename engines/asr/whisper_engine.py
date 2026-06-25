@@ -196,10 +196,14 @@ def transcribe(wav_path: str, language: str, duration: float = 0.0,
     segments = _group_words(words) if words else _fallback_segments(text, duration)
 
     _log(f"Whisper hotovo: {len(text)} znaků, {len(segments)} segmentů")
-    return {
+    # detected_language: kód Whisperu (cs/en/uk…) pro zpětné mapování v pipeline
+    result: dict = {
         "text": text,
         "segments": segments,
         "words": words,
         "backend": "faster-whisper",
         "model": model_name,
     }
+    if detected and detected != "?":
+        result["detected_language"] = detected
+    return result

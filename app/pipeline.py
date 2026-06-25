@@ -61,9 +61,26 @@ def run_dub(jobs, job_id: str) -> None:
         src_srt = config.OUTPUTS_DIR / f"{job_id}.src.srt"
         exporters.write_srt(result, src_srt)
         log(f"ASR: {len(segs)} segmentů, {dur:.1f}s")
+        if not segs:
+            log("Varování: ASR nenašel žádné mluvené segmenty (ticho nebo nerozpoznaná řeč).")
 
         # 3) překlad segment po segmentu (zachová časování)
         prog("translating", 40)
+        # Když zdrojový jazyk je "auto", zkus použít detekovaný jazyk z ASR
+        # (Whisper ho vrátí; parakeet auto-detekuje bez explicitního kódu).
+        # Argostranslate potřebuje konkrétní kód — bez něj vrátí původní text.
+        _WHISPER_LOCALE = {
+            "cs": "cs-CZ", "en": "en-US", "uk": "uk-UA", "ru": "ru-RU",
+            "de": "de-DE", "pl": "pl-PL", "sk": "sk-SK", "es": "es-ES",
+            "fr": "fr-FR", "it": "it-IT",
+        }
+        effective_src = job.source_lang
+        if effective_src == "auto":
+            det = result.get("detected_language")
+            if det:
+                effective_src = _WHISPER_LOCALE.get(det, "auto")
+                if effective_src != "auto":
+                    log(f"Detekovaný jazyk: {det} → použiji {effective_src} pro překlad")
         n = len(segs) or 1
         out_segs = []
         for i, s in enumerate(segs):
@@ -74,7 +91,7 @@ def run_dub(jobs, job_id: str) -> None:
                 log(f"Přeskakuji segment {i} s neplatným časováním ({start}–{end})")
                 continue
             tr = asr_engine.llm_translate(txt, target, log,
-                                           source=job.source_lang) if txt else txt
+                                           source=effective_src) if txt else txt
             if tr:
                 tr = asr_engine._llm_correct_chunk(tr, target)
             out_segs.append({"start": start, "end": end, "text": tr})
