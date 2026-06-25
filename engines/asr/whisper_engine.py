@@ -18,9 +18,13 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from typing import Callable, List, Optional
 
 LogFn = Optional[Callable[[str], None]]
+
+_model_cache: dict = {}   # (model_name, device, compute) -> WhisperModel
+_model_lock = threading.Lock()
 
 # Mapování PZ locale → Whisper jazyk
 _LANG_MAP: dict = {
@@ -153,18 +157,24 @@ def transcribe(wav_path: str, language: str, duration: float = 0.0,
     compute = os.environ.get("PZ_WHISPER_COMPUTE", "int8")
     lang = _LANG_MAP.get(language)
 
-    _log(f"Whisper ASR: model={model_name}, device={device}, "
-         f"compute={compute}, jazyk={lang or 'auto'}")
-    _log("Whisper: načítám model (první start = stahování z HuggingFace)…")
-
-    try:
-        model = WhisperModel(model_name, device=device, compute_type=compute)
-    except Exception as e:
-        raise RuntimeError(
-            f"faster-whisper nepodařilo načíst model '{model_name}': {e}. "
-            "Zkontroluj připojení k internetu nebo zvol jiný model "
-            "(PZ_WHISPER_MODEL=small)."
-        ) from e
+    cache_key = (model_name, device, compute)
+    with _model_lock:
+        if cache_key not in _model_cache:
+            _log(f"Whisper ASR: model={model_name}, device={device}, "
+                 f"compute={compute}, jazyk={lang or 'auto'}")
+            _log("Whisper: načítám model (první start = stahování z HuggingFace)…")
+            try:
+                _model_cache[cache_key] = WhisperModel(
+                    model_name, device=device, compute_type=compute)
+            except Exception as e:
+                raise RuntimeError(
+                    f"faster-whisper nepodařilo načíst model '{model_name}': {e}. "
+                    "Zkontroluj připojení k internetu nebo zvol jiný model "
+                    "(PZ_WHISPER_MODEL=small)."
+                ) from e
+        else:
+            _log(f"Whisper ASR: model={model_name} (cache), jazyk={lang or 'auto'}")
+    model = _model_cache[cache_key]
 
     _log("Whisper: přepisuji…")
     segments_gen, info = model.transcribe(
