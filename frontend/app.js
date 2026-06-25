@@ -150,7 +150,8 @@ async function startDub() {
     _setPicked(res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění", !res.ok);
     setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) _setPicked("", false); }, 3000);
     $("file").value = "";
-    refresh();
+    await refresh();
+    _scheduleRefresh(1500);
   } catch (e) {
     $("start").disabled = false;
     _setPicked("Chyba spojení: " + e, true);
@@ -356,7 +357,7 @@ function jobCard(j) {
   return `<div class="job ${j.status}">
     <div class="jhead">
       <span class="jname" title="${escHtml(j.filename)}">${escHtml(j.filename)}</span>
-      <span class="jstat">${st}${running ? " · " + j.progress + "%" + _elapsed(j.created_at) : ""}</span>
+      <span class="jstat">${st}${running ? " · " + j.progress + "%" + _elapsed(j.started_at || j.created_at) : ""}</span>
     </div>
     <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}${metaExtra}</div>
     <div class="bar"><div class="fill" style="width:${j.progress}%"></div></div>
@@ -370,17 +371,27 @@ function jobCard(j) {
 }
 
 let _lastJobsJson = "";
+let _refreshTimer = null;
 
 async function refresh() {
   let data;
-  try { data = await jget("/api/jobs"); } catch { return; }
+  try { data = await jget("/api/jobs"); } catch { return false; }
   const sig = JSON.stringify(data.jobs.map(j => [j.id, j.status, j.progress, j.error, j.duration, j.segments_count]));
   const hasRunning = data.jobs.some(j => !["done", "error"].includes(j.status));
-  if (!hasRunning && sig === _lastJobsJson) return;
+  if (!hasRunning && sig === _lastJobsJson) return false;
   _lastJobsJson = sig;
   const box = $("jobs");
-  if (!data.jobs.length) { box.innerHTML = '<p class="empty">Zatím žádné zakázky.</p>'; return; }
+  if (!data.jobs.length) { box.innerHTML = '<p class="empty">Zatím žádné zakázky.</p>'; return false; }
   box.innerHTML = data.jobs.map(jobCard).join("");
+  return hasRunning;
+}
+
+function _scheduleRefresh(delayMs) {
+  clearTimeout(_refreshTimer);
+  _refreshTimer = setTimeout(async () => {
+    const hasRunning = await refresh();
+    _scheduleRefresh(hasRunning ? 1500 : 5000);
+  }, delayMs);
 }
 
 let _logJobId = null, _logInterval = null;
@@ -472,8 +483,7 @@ $("ae-dl").addEventListener("click", _aeDownload);
 
 loadStatus();
 loadVoices();
-refresh();
-setInterval(refresh, 1500);
+refresh().then(r => _scheduleRefresh(r ? 1500 : 5000));
 setInterval(loadStatus, 15000);
 
 // --- přepínač světlý / tmavý režim ---

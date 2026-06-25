@@ -11,6 +11,7 @@ Běží v samostatném vlákně; stav a progres hlásí přes JobManager.
 from __future__ import annotations
 
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 from dub import _ffmpeg as ff
@@ -40,6 +41,8 @@ def run_dub(jobs, job_id: str) -> None:
     work.mkdir(parents=True, exist_ok=True)
     upload = Path(job.upload_path)
     target = job.target_lang
+
+    jobs.update(job_id, started_at=datetime.now().isoformat(timespec="seconds"))
 
     try:
         is_video = job.is_video and ff.has_video(upload)

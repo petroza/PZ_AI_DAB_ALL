@@ -55,6 +55,7 @@ class DubJob:
     output_json: Optional[str] = None
 
     created_at: str = field(default_factory=_now)
+    started_at: Optional[str] = None
     finished_at: Optional[str] = None
     error: Optional[str] = None
     log_path: Optional[str] = None

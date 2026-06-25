@@ -21,8 +21,9 @@ from typing import Optional
 from app import config
 from .base import TTSBackend, TTSError, TTSNotReady, popen_kwargs
 
-_piper_cache: dict = {}   # model_path -> PiperVoice
+_piper_cache: dict = {}        # model_path -> PiperVoice
 _piper_lock = threading.Lock()
+_voice_dl_lock = threading.Lock()  # serialise concurrent voice downloads
 
 
 def _log(log, msg: str) -> None:
@@ -54,27 +55,32 @@ def _download_voice(voice_id: str, voices_dir: Path, log=None) -> "Path | None":
     voices_dir.mkdir(parents=True, exist_ok=True)
     onnx = voices_dir / f"{voice_id}.onnx"
     json_ = voices_dir / f"{voice_id}.onnx.json"
+
     def _fetch(url: str, dst: Path) -> None:
         with urllib.request.urlopen(url, timeout=120) as resp:
             data = resp.read()
         dst.write_bytes(data)
 
-    try:
-        if not onnx.is_file():
-            _log(log, f"Stahuji hlas {voice_id}.onnx z HuggingFace…")
-            _fetch(f"{base}.onnx", onnx)
-        if not json_.is_file():
-            _log(log, f"Stahuji konfiguraci {voice_id}.onnx.json…")
-            _fetch(f"{base}.onnx.json", json_)
-        return onnx
-    except Exception as e:
-        _log(log, f"Stažení hlasu selhalo: {e}")
-        for p in (onnx, json_):
-            try:
-                p.unlink(missing_ok=True)
-            except Exception:
-                pass
-        return None
+    with _voice_dl_lock:
+        # Re-check under lock — another thread may have downloaded already.
+        if onnx.is_file() and json_.is_file():
+            return onnx
+        try:
+            if not onnx.is_file():
+                _log(log, f"Stahuji hlas {voice_id}.onnx z HuggingFace…")
+                _fetch(f"{base}.onnx", onnx)
+            if not json_.is_file():
+                _log(log, f"Stahuji konfiguraci {voice_id}.onnx.json…")
+                _fetch(f"{base}.onnx.json", json_)
+            return onnx
+        except Exception as e:
+            _log(log, f"Stažení hlasu selhalo: {e}")
+            for p in (onnx, json_):
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            return None
 
 
 def _ensure_voice(lang: str, voice: "str | None", log=None) -> "Path | None":
