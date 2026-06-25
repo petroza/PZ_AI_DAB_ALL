@@ -32,4 +32,6 @@ def export_audio(audio_wav, out_path, log=None) -> Path:
                 str(out_path)], log=log)
     else:
         ff.run(["-i", str(audio_wav), "-c:a", "pcm_s16le", str(out_path)], log=log)
+    if not out_path.is_file() or out_path.stat().st_size == 0:
+        raise ff.DubError("Export audia nevytvořil výstupní soubor (prázdný soubor).")
     return out_path

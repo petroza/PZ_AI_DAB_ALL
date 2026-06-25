@@ -65,11 +65,17 @@ SUPPORTED_INPUT_EXTENSIONS = {
 # --- Jazyky ---------------------------------------------------------------
 # UI locale -> kód jazyka pro parakeet (auto = nechat model rozhodnout).
 LANGUAGE_MAP = {
-    "auto": None,
+    "auto":  None,
     "cs-CZ": "cs-CZ",
     "en-US": "en-US",
     "uk-UA": "uk-UA",
     "ru-RU": "ru-RU",
+    "de-DE": "de-DE",
+    "pl-PL": "pl-PL",
+    "sk-SK": "sk-SK",
+    "es-ES": "es-ES",
+    "fr-FR": "fr-FR",
+    "it-IT": "it-IT",
 }
 SUPPORTED_LANGUAGES = list(LANGUAGE_MAP.keys())
 DEFAULT_LANGUAGE = "cs-CZ"   # priorita: čeština
