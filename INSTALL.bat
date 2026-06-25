@@ -55,38 +55,57 @@ if "!FFOK!"=="1" ( echo [OK] ffmpeg nalezen ) else (
   echo      a dej ffmpeg.exe + ffprobe.exe do  %CD%\tools\ffmpeg\
 )
 
-REM 5) parakeet.cpp (ASR)
-dir /b /s "tools\parakeet\parakeet-cli.exe" >nul 2>nul
-if errorlevel 1 (
-  where parakeet-cli >nul 2>nul && ( echo [OK] parakeet-cli v PATH ) || (
-    echo [!]  parakeet-cli.exe NENALEZEN - https://github.com/mudler/parakeet.cpp/releases
-    echo      dej parakeet-cli.exe do  %CD%\tools\parakeet\ )
-) else ( echo [OK] parakeet-cli nalezen v tools\parakeet )
-
-REM 6) ASR model
-dir /b "models\*.gguf" >nul 2>nul
-if errorlevel 1 (
-  echo [!]  Zadny .gguf model ve  models\
-  echo      Doporuceno: tdt-0.6b-v3-q8_0.gguf z https://huggingface.co/mudler/parakeet-cpp-gguf
-) else ( echo [OK] ASR model .gguf nalezen v models\ )
+REM 5) ASR — parakeet.cpp nebo faster-whisper
+set ASROK=0
+dir /b /s "tools\parakeet\parakeet-cli.exe" >nul 2>nul && set ASROK=1
+if "!ASROK!"=="0" where parakeet-cli >nul 2>nul && set ASROK=1
+if "!ASROK!"=="1" (
+  echo [OK] parakeet-cli nalezen
+  dir /b "models\*.gguf" >nul 2>nul
+  if errorlevel 1 (
+    echo [!]  Zadny .gguf model ve  models\
+    echo      Doporuceno: tdt-0.6b-v3-q8_0.gguf z https://huggingface.co/mudler/parakeet-cpp-gguf
+  ) else ( echo [OK] ASR model .gguf nalezen v models\ )
+) else (
+  python -c "import faster_whisper" >nul 2>nul
+  if errorlevel 1 (
+    echo [!]  Zadne ASR - nainstaluj parakeet-cli NEBO spust:
+    echo      pip install faster-whisper
+    echo      Model se stahne automaticky pri prvnim pouziti.
+  ) else ( echo [OK] faster-whisper nalezen (Python ASR fallback, model se stahne automaticky) )
+)
 
 REM 7) Piper (TTS) + cesky hlas
 set PIPEROK=0
 where piper >nul 2>nul && set PIPEROK=1
 if "!PIPEROK!"=="0" if exist "tools\piper\piper.exe" set PIPEROK=1
+if "!PIPEROK!"=="0" python -c "import piper" >nul 2>nul && set PIPEROK=1
 if "!PIPEROK!"=="1" ( echo [OK] Piper nalezen ) else (
   echo [!]  Piper NENALEZEN - https://github.com/rhasspy/piper/releases
-  echo      dej piper.exe do  %CD%\tools\piper\   (nebo: pip install piper-tts)
+  echo      dej piper.exe do  %CD%\tools\piper\   NEBO:  pip install piper-tts
 )
 dir /b "voices\cs_CZ*.onnx" >nul 2>nul
 if errorlevel 1 (
-  echo [!]  Chybi cesky Piper hlas. Stahni cs_CZ-jirka-medium.onnx ^(+ .onnx.json^)
+  echo [!]  Cesky Piper hlas nenalezen ve voices\
+  echo      Bude se stahovat automaticky pri dabingu (piper-tts pip)
+  echo      nebo stahni rucne: cs_CZ-jirka-medium.onnx + .onnx.json
   echo      z https://huggingface.co/rhasspy/piper-voices  do  %CD%\voices\
 ) else ( echo [OK] cesky Piper hlas nalezen v voices\ )
 
 echo.
+REM 8) Preklad — Ollama nebo argostranslate
+python -c "import requests; import requests; r=requests.get('http://127.0.0.1:11434',timeout=2)" >nul 2>nul
+if errorlevel 1 (
+  python -c "import argostranslate" >nul 2>nul
+  if errorlevel 1 (
+    echo [!]  Zadny prekladac - spust Ollama (ollama pull gemma4) nebo:
+    echo      pip install argostranslate  (balicky se stahnou pri prvnim pouziti)
+  ) else ( echo [OK] argostranslate nalezen (offline preklad) )
+) else ( echo [OK] Ollama bezi )
+
+echo.
 echo ==================================================
 echo   Hotovo. Aplikaci spustis pres  START.bat
-echo   (volitelne: Ollama pro preklad, PZ Voice Studio pro Chatterbox)
+echo   (volitelne: Ollama pro kvalitn. preklad, PZ Voice Studio pro Chatterbox)
 echo ==================================================
 pause
