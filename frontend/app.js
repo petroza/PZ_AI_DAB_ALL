@@ -358,7 +358,8 @@ async function refresh() {
   let data;
   try { data = await jget("/api/jobs"); } catch { return; }
   const sig = JSON.stringify(data.jobs.map(j => [j.id, j.status, j.progress, j.error, j.duration, j.segments_count]));
-  if (sig === _lastJobsJson) return;
+  const hasRunning = data.jobs.some(j => !["done", "error"].includes(j.status));
+  if (!hasRunning && sig === _lastJobsJson) return;
   _lastJobsJson = sig;
   const box = $("jobs");
   if (!data.jobs.length) { box.innerHTML = '<p class="empty">Zatím žádné zakázky.</p>'; return; }
