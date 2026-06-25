@@ -23,21 +23,26 @@ where ffmpeg >nul 2>nul && set FFOK=1
 if "!FFOK!"=="0" if exist "tools\ffmpeg\ffmpeg.exe" set FFOK=1
 if "!FFOK!"=="1" (echo [OK] ffmpeg) else (echo [!]  ffmpeg nenalezen)
 
-dir /b /s "tools\parakeet\parakeet-cli.exe" >nul 2>nul
-if errorlevel 1 (
-  where parakeet-cli >nul 2>nul && (echo [OK] parakeet-cli v PATH) || (echo [!]  parakeet-cli nenalezen)
-) else (echo [OK] parakeet-cli v tools\parakeet)
-
-dir /b "models\*.gguf" >nul 2>nul
-if errorlevel 1 (echo [!]  zadny .gguf v models\) else (echo [OK] ASR model .gguf v models\)
+set ASROK=0
+dir /b /s "tools\parakeet\parakeet-cli.exe" >nul 2>nul && set ASROK=1
+if "!ASROK!"=="0" where parakeet-cli >nul 2>nul && set ASROK=1
+if "!ASROK!"=="1" (
+  echo [OK] parakeet-cli
+  dir /b "models\*.gguf" >nul 2>nul
+  if errorlevel 1 (echo [!]  zadny .gguf model v models\) else (echo [OK] ASR model .gguf v models\)
+) else (
+  .venv\Scripts\python.exe -c "import faster_whisper" >nul 2>nul
+  if errorlevel 1 (echo [!]  ASR neni - nainstaluj parakeet-cli nebo: pip install faster-whisper) else (echo [OK] faster-whisper (Python ASR))
+)
 
 set PIPEROK=0
 where piper >nul 2>nul && set PIPEROK=1
 if "!PIPEROK!"=="0" if exist "tools\piper\piper.exe" set PIPEROK=1
-if "!PIPEROK!"=="1" (echo [OK] Piper) else (echo [!]  Piper nenalezen)
+if "!PIPEROK!"=="0" .venv\Scripts\python.exe -c "import piper" >nul 2>nul && set PIPEROK=1
+if "!PIPEROK!"=="1" (echo [OK] Piper) else (echo [!]  Piper nenalezen - pip install piper-tts)
 
 dir /b "voices\*.onnx" >nul 2>nul
-if errorlevel 1 (echo [!]  zadny Piper hlas v voices\) else (echo [OK] Piper hlas v voices\)
+if errorlevel 1 (echo [i]  zadny Piper hlas v voices\ - stahne se automaticky pri dabingu) else (echo [OK] Piper hlas v voices\)
 
 REM zapis do slozek
 for %%D in (uploads outputs jobs logs work) do (
@@ -48,9 +53,12 @@ for %%D in (uploads outputs jobs logs work) do (
 netstat -ano | findstr ":8790" >nul 2>nul
 if errorlevel 1 (echo [OK] port 8790 je volny) else (echo [!]  port 8790 je OBSAZENY)
 
-REM Ollama (preklad)
+REM Preklad — Ollama nebo argostranslate
 curl -s -m 5 http://127.0.0.1:11434/api/tags >nul 2>nul
-if errorlevel 1 (echo [!]  Ollama nebezi - preklad se preskoci ^(zustane puvodni jazyk^)) else (echo [OK] Ollama bezi - preklad aktivni)
+if errorlevel 1 (
+  .venv\Scripts\python.exe -c "import argostranslate" >nul 2>nul
+  if errorlevel 1 (echo [!]  Prekladac neni - spust Ollama nebo: pip install argostranslate) else (echo [OK] argostranslate nalezen (offline preklad))
+) else (echo [OK] Ollama bezi - preklad aktivni)
 
 REM PZ Voice Studio (volitelny TTS backend)
 curl -s -m 5 http://127.0.0.1:7867/api/ping >nul 2>nul
