@@ -156,10 +156,17 @@ class JobManager:
             return True
 
     # --- logy ------------------------------------------------------------
+    _LOG_MAX_BYTES = 512 * 1024   # 512 KB na log
+
     def append_log(self, job: Optional[DubJob], msg: str) -> None:
         if not job or not job.log_path:
             return
         try:
+            p = Path(job.log_path)
+            if p.is_file() and p.stat().st_size > self._LOG_MAX_BYTES:
+                # Uřízni první třetinu, zachovej konec (nové záznamy)
+                text = p.read_text(encoding="utf-8", errors="replace")
+                p.write_text(text[len(text) // 3:], encoding="utf-8")
             with open(job.log_path, "a", encoding="utf-8") as fh:
                 fh.write(f"[{_now()}] {msg}\n")
         except Exception:

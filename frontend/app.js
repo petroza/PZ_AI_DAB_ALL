@@ -72,22 +72,28 @@ async function loadStatus() {
   } catch (_) {}
 }
 
+function _setPicked(msg, isErr) {
+  const el = $("picked");
+  el.textContent = msg;
+  el.classList.toggle("err", !!isErr);
+}
+
 async function uploadFile(file) {
-  $("picked").textContent = "Nahrávám: " + file.name + " …";
+  _setPicked("Nahrávám: " + file.name + " …", false);
   const fd = new FormData(); fd.append("file", file);
   try {
     const r = await fetch("/api/upload", { method: "POST", body: fd });
     if (!r.ok) {
-      $("picked").textContent = "Chyba: " + (await r.text());
-      $("file").value = "";   // reset input — umožní zvolit stejný soubor znovu
+      _setPicked("Chyba: " + (await r.text()), true);
+      $("file").value = "";
       return;
     }
     const data = await r.json();
     currentJob = data.job_id;
-    $("picked").textContent = "Připraveno: " + file.name;
+    _setPicked("Připraveno: " + file.name, false);
     $("start").disabled = false;
   } catch (e) {
-    $("picked").textContent = "Chyba nahrávání: " + e;
+    _setPicked("Chyba nahrávání: " + e, true);
     $("file").value = "";
   }
 }
@@ -109,8 +115,8 @@ async function startDub() {
   });
   currentJob = null;
   $("start").disabled = true;
-  $("picked").textContent = res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění";
-  setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) $("picked").textContent = ""; }, 3000);
+  _setPicked(res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění", !res.ok);
+  setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) _setPicked("", false); }, 3000);
   $("file").value = "";
   refresh();
 }
