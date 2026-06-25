@@ -33,9 +33,23 @@ LOGS_DIR = BASE_DIR / "logs"
 
 APP_LOG = LOGS_DIR / "app.log"
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
 # --- Síť ------------------------------------------------------------------
 HOST = os.environ.get("PZ_HOST", "127.0.0.1")
-PORT = int(os.environ.get("PZ_PORT", "8787"))
+PORT = _env_int("PZ_PORT", 8787)
 
 # --- Audio pipeline -------------------------------------------------------
 # Výstup do ASR musí být VŽDY 16 kHz / mono / PCM s16le.
@@ -90,7 +104,7 @@ PARAKEET_LANG_FLAG = os.environ.get("PZ_PARAKEET_LANG_FLAG", "--lang")
 PARAKEET_SEND_LANG_FLAG = os.environ.get("PZ_PARAKEET_SEND_LANG", "1") == "1"
 
 # Timeout přepisu v sekundách. 0 = bez limitu.
-PARAKEET_TIMEOUT = int(os.environ.get("PZ_PARAKEET_TIMEOUT", "0"))
+PARAKEET_TIMEOUT = _env_int("PZ_PARAKEET_TIMEOUT", 0)
 
 # --- Titulkování ----------------------------------------------------------
 SUBTITLE_MAX_CHARS = 64       # max délka řádku titulku (znaky)
@@ -113,7 +127,7 @@ CORRECTIONS_FILE = BASE_DIR / "corrections.txt"
 LLM_CORRECT = os.environ.get("PZ_LLM_CORRECT", "1") == "1"
 OLLAMA_URL = os.environ.get("PZ_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
 OLLAMA_MODEL = os.environ.get("PZ_OLLAMA_MODEL", "gemma4:latest")
-LLM_TIMEOUT = int(os.environ.get("PZ_LLM_TIMEOUT", "300"))  # vyšší kvůli studenému startu velkého modelu
+LLM_TIMEOUT = _env_int("PZ_LLM_TIMEOUT", 300)  # vyšší kvůli studenému startu velkého modelu
 
 # --- Detekce anglických slov dvojprůchodem (EXPERIMENT, default vyp) -------
 # Plně automatické, bez slovníku: udělá se i druhý průchod v angličtině,
@@ -124,9 +138,9 @@ LLM_TIMEOUT = int(os.environ.get("PZ_LLM_TIMEOUT", "300"))  # vyšší kvůli st
 # angličtinu i nad českými slovy (čeština se rozbíjí) a český model je u
 # správného slova jistější -> nespolehlivé. Spolehlivé řešení = corrections.txt.
 CODESWITCH_EN = os.environ.get("PZ_CODESWITCH", "0") == "1"
-CODESWITCH_EN_MIN_CONF = float(os.environ.get("PZ_CS_EN_CONF", "0.55"))  # min. jistota EN slova
-CODESWITCH_CONF_DELTA = float(os.environ.get("PZ_CS_DELTA", "0.10"))     # o kolik musí EN > CZ
-CODESWITCH_MIN_LEN = int(os.environ.get("PZ_CS_MINLEN", "3"))            # min. délka EN slova
+CODESWITCH_EN_MIN_CONF = _env_float("PZ_CS_EN_CONF", 0.55)  # min. jistota EN slova
+CODESWITCH_CONF_DELTA = _env_float("PZ_CS_DELTA", 0.10)     # o kolik musí EN > CZ
+CODESWITCH_MIN_LEN = _env_int("PZ_CS_MINLEN", 3)            # min. délka EN slova
 
 
 # --- Pomocné funkce -------------------------------------------------------
