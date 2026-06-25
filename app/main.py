@@ -7,6 +7,7 @@ Spuštění (z kořene projektu):
 from __future__ import annotations
 
 import platform
+import re
 import shutil
 import sys
 import threading
@@ -27,6 +28,12 @@ config.ensure_dirs()
 
 app = FastAPI(title="PZ AI DAB ALL", version="1.0.0")
 jobs = JobManager()
+
+_JOB_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+
+
+def _valid_job_id(job_id: str) -> bool:
+    return bool(_JOB_ID_RE.match(job_id))
 
 
 class DubRequest(BaseModel):
@@ -117,6 +124,8 @@ async def api_upload(file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/dub/{job_id}")
 def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job nenalezen.")
@@ -146,6 +155,8 @@ def api_jobs() -> dict:
 
 @app.get("/api/jobs/{job_id}")
 def api_job(job_id: str) -> dict:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job nenalezen.")
@@ -154,6 +165,8 @@ def api_job(job_id: str) -> dict:
 
 @app.get("/api/jobs/{job_id}/log")
 def api_job_log(job_id: str) -> PlainTextResponse:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
     if not jobs.get(job_id):
         raise HTTPException(404, "Job nenalezen.")
     return PlainTextResponse(jobs.read_log(job_id))
@@ -161,6 +174,8 @@ def api_job_log(job_id: str) -> PlainTextResponse:
 
 @app.get("/api/download/{job_id}/{kind}")
 def api_download(job_id: str, kind: str) -> FileResponse:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job nenalezen.")
@@ -181,6 +196,8 @@ def api_download(job_id: str, kind: str) -> FileResponse:
 
 @app.delete("/api/jobs/{job_id}")
 def api_delete(job_id: str) -> dict:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
     if not jobs.delete(job_id):
         raise HTTPException(404, "Job nenalezen.")
     return {"deleted": job_id}
