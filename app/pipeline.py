@@ -145,10 +145,16 @@ def run_dub(jobs, job_id: str) -> None:
                                             opts=_BURN_OPTS, log=log)
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)
+            if not out_video.is_file() or out_video.stat().st_size == 0:
+                raise RuntimeError(
+                    f"Mux selhal: výstupní video chybí nebo je prázdné ({out_video.name})")
             jobs.update(job_id, output_video=str(out_video))
         else:
             out_audio = config.OUTPUTS_DIR / f"{job_id}.dubbed.mp3"
             mux.export_audio(final_audio, out_audio, log=log)
+            if not out_audio.is_file() or out_audio.stat().st_size == 0:
+                raise RuntimeError(
+                    f"Export audia selhal: výstupní soubor chybí nebo je prázdný ({out_audio.name})")
             jobs.update(job_id, output_audio=str(out_audio))
 
         prog("done", 100)

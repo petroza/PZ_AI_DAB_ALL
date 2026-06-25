@@ -1,5 +1,9 @@
 "use strict";
 
+function escHtml(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
 const LANG = {
   "auto": "Auto (detekce)", "cs-CZ": "Čeština", "en-US": "Angličtina",
   "uk-UA": "Ukrajinština", "ru-RU": "Ruština", "de-DE": "Němčina",
@@ -43,13 +47,29 @@ async function loadStatus() {
   } else {
     bits.push("ASR ✗");
   }
-  bits.push(s.ollama.ok ? "překlad ✓" : "překlad (offline)");
+  if (s.ollama && s.ollama.ok) {
+    bits.push("překlad ✓");
+  } else if (s.argostranslate && s.argostranslate.ok) {
+    bits.push(`překlad (offline${s.argostranslate.langs > 0 ? " ·" + s.argostranslate.langs + " párů" : ""})`);
+  } else {
+    bits.push("překlad ✗");
+  }
   bits.push(s.tts.piper.ok ? "Piper ✓" : "Piper ✗");
   if (s.tts.piper.ok && !s.tts.piper.cs_voice) bits.push("(chybí CZ hlas)");
   $("status").innerHTML = bits.map((b) =>
     `<span class="${b.includes('✗') ? 'bad' : 'ok'}">${b}</span>`).join(" · ");
   $("hint").textContent = s.ready
     ? "" : "Některé nástroje chybí — spusť: pip install faster-whisper piper-tts  (nebo viz README).";
+  // Naplň datalist hlasů
+  try {
+    const vr = await jget("/api/voices");
+    const dl = document.getElementById("voices-list");
+    if (dl) {
+      dl.innerHTML = "";
+      const all = [...(vr.piper || []), ...(vr.voicestudio || [])];
+      all.forEach(v => { const o = document.createElement("option"); o.value = v; dl.appendChild(o); });
+    }
+  } catch (_) {}
 }
 
 async function uploadFile(file) {
@@ -57,12 +77,19 @@ async function uploadFile(file) {
   const fd = new FormData(); fd.append("file", file);
   try {
     const r = await fetch("/api/upload", { method: "POST", body: fd });
-    if (!r.ok) { $("picked").textContent = "Chyba: " + (await r.text()); return; }
+    if (!r.ok) {
+      $("picked").textContent = "Chyba: " + (await r.text());
+      $("file").value = "";   // reset input — umožní zvolit stejný soubor znovu
+      return;
+    }
     const data = await r.json();
     currentJob = data.job_id;
     $("picked").textContent = "Připraveno: " + file.name;
     $("start").disabled = false;
-  } catch (e) { $("picked").textContent = "Chyba nahrávání: " + e; }
+  } catch (e) {
+    $("picked").textContent = "Chyba nahrávání: " + e;
+    $("file").value = "";
+  }
 }
 
 async function startDub() {
@@ -76,13 +103,15 @@ async function startDub() {
     burn_subs: $("burn_subs").checked,
     llm_correct: $("llm_correct").checked,
   };
-  await fetch("/api/dub/" + currentJob, {
+  const res = await fetch("/api/dub/" + currentJob, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   currentJob = null;
   $("start").disabled = true;
-  $("picked").textContent = "";
+  $("picked").textContent = res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění";
+  setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) $("picked").textContent = ""; }, 3000);
+  $("file").value = "";
   refresh();
 }
 
@@ -158,9 +187,23 @@ function _aeUpdatePreview() {
   ctx.fillText(`Y: ${posYpct}%  ·  ${compW}×${compH}  ·  ${fontSizePx}px`, 7, 5);
 }
 
+const _AE_FIELDS = ["ae-fontsize","ae-perline","ae-posy","ae-res","ae-fps"];
+function _aeSaveSettings() {
+  const obj = {};
+  _AE_FIELDS.forEach(id => { obj[id] = $(id).value; });
+  localStorage.setItem("ae-settings", JSON.stringify(obj));
+}
+function _aeLoadSettings() {
+  try {
+    const obj = JSON.parse(localStorage.getItem("ae-settings") || "{}");
+    _AE_FIELDS.forEach(id => { if (obj[id] !== undefined) $(id).value = obj[id]; });
+  } catch (_) {}
+}
+
 function showAeModal(id, filename) {
   _aeJobId = id; _aeFilename = filename;
   $("ae-jobname").textContent = filename;
+  _aeLoadSettings();
   $("aebox").classList.remove("hidden");
   _aeUpdatePreview();
 }
@@ -244,8 +287,6 @@ async function _aeDownload() {
   } catch (e) { alert("Chyba: " + e); }
   finally { btn.disabled = false; btn.textContent = "⬇ Stáhnout .jsx skript pro After Effects"; }
 }
-window.showAeModal = showAeModal;
-
 function jobCard(j) {
   const st = STATUS[j.status] || j.status;
   const running = !["done", "error"].includes(j.status);
@@ -255,13 +296,13 @@ function jobCard(j) {
     if (j.output_audio) outs += dl(j.id, "audio", "⬇ Audio");
     if (j.output_srt_tgt) outs += dl(j.id, "srt_tgt", "⬇ Titulky (cíl)");
     if (j.output_srt_src) outs += dl(j.id, "srt_src", "⬇ Titulky (zdroj)");
-    if (j.output_json) outs += `<button class="dlbtn" onclick="showAeModal('${j.id}','${j.filename.replace(/'/g,"\\'")}')">⬇ After Effects (.jsx)</button>`;
+    if (j.output_json) outs += `<button class="dlbtn" data-action="ae" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}">⬇ After Effects (.jsx)</button>`;
   }
-  const err = j.error ? `<div class="err">${j.error}</div>` : "";
+  const err = j.error ? `<div class="err">${escHtml(j.error)}</div>` : "";
   const dir = (LANG[j.source_lang] || j.source_lang) + " → " + (LANG[j.target_lang] || j.target_lang);
   return `<div class="job ${j.status}">
     <div class="jhead">
-      <span class="jname" title="${j.filename}">${j.filename}</span>
+      <span class="jname" title="${escHtml(j.filename)}">${escHtml(j.filename)}</span>
       <span class="jstat">${st}${running ? " · " + j.progress + "%" : ""}</span>
     </div>
     <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}</div>
@@ -269,8 +310,8 @@ function jobCard(j) {
     ${err}
     <div class="jactions">
       ${outs}
-      <button class="lnk" onclick="showLog('${j.id}','${j.filename}')">Log</button>
-      <button class="lnk del" onclick="delJob('${j.id}')">Smazat</button>
+      <button class="lnk" data-action="log" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}">Log</button>
+      <button class="lnk del" data-action="del" data-id="${escHtml(j.id)}">Smazat</button>
     </div>
   </div>`;
 }
@@ -287,13 +328,25 @@ async function showLog(id, name) {
   $("logtitle").textContent = "Log · " + name;
   $("logtext").textContent = "…";
   $("logbox").classList.remove("hidden");
-  $("logtext").textContent = await (await fetch("/api/jobs/" + id + "/log")).text();
+  const txt = await (await fetch("/api/jobs/" + id + "/log")).text();
+  $("logtext").textContent = txt;
+  $("logtext").scrollTop = $("logtext").scrollHeight;
 }
 async function delJob(id) {
+  if (!confirm("Opravdu smazat tuto zakázku?")) return;
   await fetch("/api/jobs/" + id, { method: "DELETE" });
   refresh();
 }
-window.showLog = showLog; window.delJob = delJob;
+
+// Delegace kliknutí — žádné inline onclick (XSS safe)
+$("jobs").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const { action, id, fn } = btn.dataset;
+  if (action === "log") showLog(id, fn);
+  else if (action === "del") delJob(id);
+  else if (action === "ae") showAeModal(id, fn);
+});
 
 // --- události ---
 const drop = $("drop"), fileInput = $("file");
@@ -311,7 +364,7 @@ $("logclose").addEventListener("click", () => $("logbox").classList.add("hidden"
 $("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
 $("ae-dl").addEventListener("click", _aeDownload);
 ["ae-fontsize","ae-perline","ae-posy","ae-res","ae-fps"].forEach(id =>
-  $(id).addEventListener("input", _aeUpdatePreview));
+  $(id).addEventListener("input", () => { _aeUpdatePreview(); _aeSaveSettings(); }));
 
 loadStatus();
 refresh();
