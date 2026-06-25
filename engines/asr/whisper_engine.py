@@ -157,7 +157,14 @@ def transcribe(wav_path: str, language: str, duration: float = 0.0,
          f"compute={compute}, jazyk={lang or 'auto'}")
     _log("Whisper: načítám model (první start = stahování z HuggingFace)…")
 
-    model = WhisperModel(model_name, device=device, compute_type=compute)
+    try:
+        model = WhisperModel(model_name, device=device, compute_type=compute)
+    except Exception as e:
+        raise RuntimeError(
+            f"faster-whisper nepodařilo načíst model '{model_name}': {e}. "
+            "Zkontroluj připojení k internetu nebo zvol jiný model "
+            "(PZ_WHISPER_MODEL=small)."
+        ) from e
 
     _log("Whisper: přepisuji…")
     segments_gen, info = model.transcribe(

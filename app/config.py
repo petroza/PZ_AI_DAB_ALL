@@ -35,9 +35,23 @@ WORK_DIR = BASE_DIR / "work"                   # dočasné klipy/segmenty jobu
 
 APP_LOG = LOGS_DIR / "app.log"
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
 # --- Síť ------------------------------------------------------------------
 HOST = os.environ.get("DAB_HOST", "127.0.0.1")
-PORT = int(os.environ.get("DAB_PORT", "8790"))
+PORT = _env_int("DAB_PORT", 8790)
 
 # --- Vstup ----------------------------------------------------------------
 SUPPORTED_VIDEO_EXT = {
@@ -85,21 +99,21 @@ PIPER_VOICES = {
 # PZ Voice Studio (běží samostatně, výchozí port 7867).
 VOICESTUDIO_URL = os.environ.get("DAB_VOICESTUDIO_URL", "http://127.0.0.1:7867").rstrip("/")
 VOICESTUDIO_ENGINE = os.environ.get("DAB_VS_ENGINE", "Piper")  # nebo "Chatterbox 500M - quality"
-VOICESTUDIO_TIMEOUT = int(os.environ.get("DAB_VS_TIMEOUT", "600"))
+VOICESTUDIO_TIMEOUT = _env_int("DAB_VS_TIMEOUT", 600)
 
 # --- Dabing (mix & mux) ---------------------------------------------------
 # "replace"  = nahradit původní zvuk dabingem,
 # "voiceover"= dabing přes ztlumený originál (zachová hudbu/ruchy).
 AUDIO_MODE = os.environ.get("DAB_AUDIO_MODE", "replace")
-DUCK_DB = float(os.environ.get("DAB_DUCK_DB", "-14"))     # ztlumení originálu ve voiceover
-TTS_GAIN_DB = float(os.environ.get("DAB_TTS_GAIN_DB", "0"))
+DUCK_DB = _env_float("DAB_DUCK_DB", -14.0)        # ztlumení originálu ve voiceover
+TTS_GAIN_DB = _env_float("DAB_TTS_GAIN_DB", 0.0)
 
 # Time-stretch klipu na délku slotu: "auto" (rubberband, fallback atempo),
 # "rubberband", "atempo", nebo "off".
 TIMESTRETCH = os.environ.get("DAB_TIMESTRETCH", "auto")
 # Meze tempa (1.0 = beze změny). >1 = zrychlit (klip je delší než slot).
-MAX_TEMPO = float(os.environ.get("DAB_MAX_TEMPO", "1.5"))
-MIN_TEMPO = float(os.environ.get("DAB_MIN_TEMPO", "0.75"))
+MAX_TEMPO = _env_float("DAB_MAX_TEMPO", 1.5)
+MIN_TEMPO = _env_float("DAB_MIN_TEMPO", 0.75)
 
 MIX_RATE = 48000          # vzorkování společné zvukové stopy
 RUBBERBAND_EXE_NAMES = ["rubberband.exe", "rubberband"]

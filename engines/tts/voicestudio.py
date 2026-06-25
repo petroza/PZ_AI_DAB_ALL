@@ -103,21 +103,35 @@ class VoiceStudioBackend(TTSBackend):
             r = requests.post(self.base + "/api/queue/add-start", json=body,
                               timeout=30)
             r.raise_for_status()
+            start_data = r.json() if r.content else {}
         except Exception as e:
             raise TTSError(f"PZ Voice Studio /api/queue/add-start selhalo: {e}")
+
+        # Zkus vytáhnout ID nového jobu přímo z odpovědi start endpointu
+        new_job_id = None
+        if isinstance(start_data, dict):
+            new_job_id = start_data.get("id") or start_data.get("job_id")
 
         # 3) počkat na hotový job a získat URL audia
         deadline = time.time() + self.timeout
         target_url = None
+        poll_sleep = 1.0
         while time.time() < deadline:
-            time.sleep(1.0)
+            time.sleep(poll_sleep)
+            poll_sleep = min(poll_sleep * 1.25, 5.0)  # mírný backoff do 5 s
             try:
                 r = requests.get(self.base + "/api/jobs", timeout=15)
                 jobs = _jobs_list(r.json())
             except Exception:
                 continue
-            fresh = [j for j in jobs if j.get("id") not in before] or jobs
-            for j in sorted(fresh, key=lambda x: str(x.get("id")), reverse=True):
+            # Priorita: přesné ID > nové joby > nejnovější (fallback)
+            if new_job_id:
+                candidates = [j for j in jobs if j.get("id") == new_job_id]
+            else:
+                candidates = [j for j in jobs if j.get("id") not in before]
+            if not candidates:
+                candidates = sorted(jobs, key=lambda x: str(x.get("id")), reverse=True)[:1]
+            for j in candidates:
                 st = str(j.get("status", "")).lower()
                 url = _find_url(j)
                 if url and (st in _DONE or st == ""):

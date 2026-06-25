@@ -50,19 +50,26 @@ def _download_voice(voice_id: str, voices_dir: Path, log=None) -> "Path | None":
     voices_dir.mkdir(parents=True, exist_ok=True)
     onnx = voices_dir / f"{voice_id}.onnx"
     json_ = voices_dir / f"{voice_id}.onnx.json"
+    def _fetch(url: str, dst: Path) -> None:
+        with urllib.request.urlopen(url, timeout=120) as resp:
+            data = resp.read()
+        dst.write_bytes(data)
+
     try:
         if not onnx.is_file():
             _log(log, f"Stahuji hlas {voice_id}.onnx z HuggingFace…")
-            urllib.request.urlretrieve(f"{base}.onnx", onnx)
+            _fetch(f"{base}.onnx", onnx)
         if not json_.is_file():
             _log(log, f"Stahuji konfiguraci {voice_id}.onnx.json…")
-            urllib.request.urlretrieve(f"{base}.onnx.json", json_)
+            _fetch(f"{base}.onnx.json", json_)
         return onnx
     except Exception as e:
         _log(log, f"Stažení hlasu selhalo: {e}")
         for p in (onnx, json_):
-            if p.is_file():
+            try:
                 p.unlink(missing_ok=True)
+            except Exception:
+                pass
         return None
 
 
