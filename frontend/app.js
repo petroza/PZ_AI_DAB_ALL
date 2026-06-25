@@ -19,7 +19,11 @@ const STATUS = {
 const $ = (id) => document.getElementById(id);
 let currentJob = null;
 
-async function jget(url) { const r = await fetch(url); return r.json(); }
+async function jget(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
 
 function fillSelect(sel, codes, def) {
   sel.innerHTML = "";
@@ -62,19 +66,29 @@ async function loadStatus() {
     ? "" : "Některé nástroje chybí — spusť: pip install faster-whisper piper-tts  (nebo viz README).";
 }
 
+let _voicesCache = null;
+
 async function loadVoices() {
   try {
-    const vr = await jget("/api/voices");
-    const dl = document.getElementById("voices-list");
-    if (!dl) return;
-    dl.innerHTML = "";
-    const all = [...(vr.piper || []), ...(vr.voicestudio || [])];
-    all.forEach(v => {
-      const id = typeof v === "string" ? v : (v.id || v.name || String(v));
-      if (!id || id === "[object Object]") return;
-      const o = document.createElement("option"); o.value = id; dl.appendChild(o);
-    });
-  } catch (_) {}
+    _voicesCache = await jget("/api/voices");
+  } catch (_) { return; }
+  _fillVoiceList();
+}
+
+function _fillVoiceList() {
+  const dl = document.getElementById("voices-list");
+  if (!dl || !_voicesCache) return;
+  dl.innerHTML = "";
+  const engine = ($("tts_engine") || {}).value || "piper";
+  const src = engine === "piper" ? (_voicesCache.piper || [])
+            : engine.includes("voicestudio") || engine === "voicestudio"
+              ? (_voicesCache.voicestudio || [])
+            : [...(_voicesCache.piper || []), ...(_voicesCache.voicestudio || [])];
+  src.forEach(v => {
+    const id = typeof v === "string" ? v : (v.id || v.name || String(v));
+    if (!id || id === "[object Object]") return;
+    const o = document.createElement("option"); o.value = id; dl.appendChild(o);
+  });
 }
 
 function _setPicked(msg, isErr) {
@@ -311,12 +325,15 @@ function jobCard(j) {
   }
   const err = j.error ? `<div class="err">${escHtml(j.error)}</div>` : "";
   const dir = (LANG[j.source_lang] || j.source_lang) + " → " + (LANG[j.target_lang] || j.target_lang);
+  const durStr = j.duration > 0 ? ` · ${Math.round(j.duration)}s` : "";
+  const segStr = j.segments_count > 0 ? ` · ${j.segments_count} seg` : "";
+  const metaExtra = j.status === "done" ? durStr + segStr : "";
   return `<div class="job ${j.status}">
     <div class="jhead">
       <span class="jname" title="${escHtml(j.filename)}">${escHtml(j.filename)}</span>
       <span class="jstat">${st}${running ? " · " + j.progress + "%" : ""}</span>
     </div>
-    <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}</div>
+    <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}${metaExtra}</div>
     <div class="bar"><div class="fill" style="width:${j.progress}%"></div></div>
     ${err}
     <div class="jactions">
@@ -335,14 +352,53 @@ async function refresh() {
   box.innerHTML = data.jobs.map(jobCard).join("");
 }
 
+let _logJobId = null, _logInterval = null;
+
+function _logStop() {
+  if (_logInterval) { clearInterval(_logInterval); _logInterval = null; }
+}
+
+async function _logFetch(id) {
+  try {
+    const r = await fetch("/api/jobs/" + id + "/log");
+    const txt = await r.text();
+    const el = $("logtext");
+    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 40;
+    el.textContent = txt;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  } catch (_) {}
+}
+
+async function _logCheckRunning(id) {
+  try {
+    const j = await jget("/api/jobs/" + id);
+    if (["done", "error"].includes(j.status)) {
+      _logStop();
+      $("logtitle").textContent = $("logtitle").textContent.replace(" ⟳", "");
+    }
+  } catch (_) {}
+}
+
 async function showLog(id, name) {
+  _logStop();
+  _logJobId = id;
   $("logtitle").textContent = "Log · " + name;
   $("logtext").textContent = "…";
   $("logbox").classList.remove("hidden");
-  const txt = await (await fetch("/api/jobs/" + id + "/log")).text();
-  $("logtext").textContent = txt;
-  $("logtext").scrollTop = $("logtext").scrollHeight;
+  await _logFetch(id);
+  // auto-refresh pokud job stále běží
+  try {
+    const j = await jget("/api/jobs/" + id);
+    if (!["done", "error"].includes(j.status)) {
+      $("logtitle").textContent = "Log · " + name + " ⟳";
+      _logInterval = setInterval(async () => {
+        await _logFetch(_logJobId);
+        await _logCheckRunning(_logJobId);
+      }, 2000);
+    }
+  } catch (_) {}
 }
+
 async function delJob(id) {
   if (!confirm("Opravdu smazat tuto zakázku?")) return;
   await fetch("/api/jobs/" + id, { method: "DELETE" });
@@ -371,7 +427,8 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 }));
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
-$("logclose").addEventListener("click", () => $("logbox").classList.add("hidden"));
+$("tts_engine").addEventListener("change", _fillVoiceList);
+$("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });
 $("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
 $("ae-dl").addEventListener("click", _aeDownload);
 ["ae-fontsize","ae-perline","ae-posy","ae-res","ae-fps"].forEach(id =>

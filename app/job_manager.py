@@ -63,10 +63,31 @@ class DubJob:
         return asdict(self)
 
 
+_RUNNING_STATUSES = {
+    "queued", "extracting_audio", "transcribing", "translating",
+    "synthesizing", "aligning", "mixing", "muxing", "burning",
+}
+
+
 class JobManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         config.ensure_dirs()
+        self._recover_stale()
+
+    def _recover_stale(self) -> None:
+        """Při startu označí joby přerušené restartem serveru jako chybu."""
+        for f in config.JOBS_DIR.glob("*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if data.get("status") in _RUNNING_STATUSES:
+                    data["status"] = "error"
+                    data["error"] = "Job byl přerušen restartem serveru."
+                    data["finished_at"] = _now()
+                    f.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                 encoding="utf-8")
+            except Exception:
+                pass
 
     def _job_file(self, job_id: str) -> Path:
         return config.JOBS_DIR / f"{job_id}.json"

@@ -141,8 +141,9 @@ def run_dub(jobs, job_id: str) -> None:
             if job.burn_subs:
                 prog("burning", 96)
                 burned = work / "burned.mp4"
-                ffmpeg_tools.burn_subtitles(out_video, tgt_srt, burned,
-                                            opts=_BURN_OPTS, log=log)
+                ffmpeg_tools.burn_subtitles(
+                    out_video, tgt_srt, burned, opts=_BURN_OPTS, log=log,
+                    progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)
             if not out_video.is_file() or out_video.stat().st_size == 0:
@@ -169,11 +170,7 @@ def run_dub(jobs, job_id: str) -> None:
 
 def _cleanup(work: Path) -> None:
     try:
-        for p in work.glob("*"):
-            try:
-                p.unlink()
-            except Exception:
-                pass
-        work.rmdir()
+        import shutil
+        shutil.rmtree(work, ignore_errors=True)
     except Exception:
         pass
