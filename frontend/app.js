@@ -26,11 +26,12 @@ async function jget(url) {
 }
 
 function fillSelect(sel, codes, def) {
+  const keep = sel.value && codes.includes(sel.value) ? sel.value : def;
   sel.innerHTML = "";
   codes.forEach((c) => {
     const o = document.createElement("option");
     o.value = c; o.textContent = LANG[c] || c;
-    if (c === def) o.selected = true;
+    if (c === keep) o.selected = true;
     sel.appendChild(o);
   });
 }
