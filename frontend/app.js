@@ -344,9 +344,14 @@ function jobCard(j) {
   </div>`;
 }
 
+let _lastJobsJson = "";
+
 async function refresh() {
   let data;
   try { data = await jget("/api/jobs"); } catch { return; }
+  const sig = JSON.stringify(data.jobs.map(j => [j.id, j.status, j.progress, j.error, j.duration, j.segments_count]));
+  if (sig === _lastJobsJson) return;
+  _lastJobsJson = sig;
   const box = $("jobs");
   if (!data.jobs.length) { box.innerHTML = '<p class="empty">Zatím žádné zakázky.</p>'; return; }
   box.innerHTML = data.jobs.map(jobCard).join("");
