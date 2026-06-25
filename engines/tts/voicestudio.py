@@ -69,7 +69,7 @@ class VoiceStudioBackend(TTSBackend):
     def is_ready(self) -> "tuple[bool, str]":
         try:
             requests = self._requests()
-            r = requests.get(self.base + "/api/ping", timeout=5)
+            r = requests.get(self.base + "/api/ping", timeout=1)
             r.raise_for_status()
             return True, self.base
         except Exception as e:
