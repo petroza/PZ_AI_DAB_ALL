@@ -109,6 +109,8 @@ function _aeUpdatePreview() {
   if (MAX_W * aspect <= MAX_H) { cW = MAX_W; cH = Math.round(MAX_W * aspect); }
   else { cH = MAX_H; cW = Math.round(MAX_H / aspect); }
   canvas.width = cW; canvas.height = cH;
+  canvas.style.width  = cW + "px";
+  canvas.style.height = cH + "px";
 
   // Background
   ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, cW, cH);
