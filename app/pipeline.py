@@ -93,7 +93,7 @@ def run_dub(jobs, job_id: str) -> None:
             tr = asr_engine.llm_translate(txt, target, log,
                                            source=effective_src) if txt else txt
             if tr:
-                tr = asr_engine._llm_correct_chunk(tr, target)
+                tr = asr_engine.correct_text(tr, target)
             out_segs.append({"start": start, "end": end, "text": tr})
             prog("translating", 40 + (i + 1) / n * 16)
         tgt_result = {

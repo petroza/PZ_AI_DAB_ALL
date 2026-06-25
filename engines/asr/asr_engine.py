@@ -714,6 +714,11 @@ def transcribe_file(input_wav_path: str, language: str, job_id: str,
     }, use_llm=llm_correct, lang=language)
 
 
+def correct_text(text: str, lang: Optional[str] = None) -> str:
+    """Veřejné API: oprav přeložený nebo přepsaný text LLM korekcí (Ollama)."""
+    return _llm_correct_chunk(text, lang)
+
+
 def engine_status() -> dict:
     """Stav ASR backendu pro diagnostiku (/api/status)."""
     from . import whisper_engine
