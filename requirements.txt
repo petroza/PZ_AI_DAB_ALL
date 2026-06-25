@@ -1,0 +1,12 @@
+# PZ AI DAB ALL — jen lehké webové závislosti.
+# ASR řeší parakeet.cpp (binárka, CPU), TTS Piper (binárka/onnx) nebo PZ Voice
+# Studio (HTTP). Záměrně žádný torch / NeMo / velký stack.
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+requests>=2.31.0
+
+# --- Volitelné -------------------------------------------------------------
+# Lokální Piper přes pip (alternativa k binárce v tools/piper/). Stáhne i
+# onnxruntime (CPU). Odkomentuj, pokud nechceš binárku ručně:
+# piper-tts>=1.2.0

@@ -1,0 +1,22 @@
+# Python / venv / cache
+__pycache__/
+*.pyc
+.venv/
+work/
+
+# Binárky, modely a hlasy (stahují se zvlášť — viz README)
+*.gguf
+*.onnx
+*.onnx.json
+*.exe
+*.dll
+
+# Běhová data (placeholdery .gitkeep zůstávají)
+uploads/*
+outputs/*
+jobs/*
+logs/*
+models/*
+tools/*
+voices/*
+!**/.gitkeep

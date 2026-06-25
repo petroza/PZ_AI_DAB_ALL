@@ -1,0 +1,27 @@
+# =====================================================================
+#  PZ ASR Studio / Titulkovač - SLOVNÍK OPRAV (po přepisu)
+# =====================================================================
+#  K čemu to je: model píše cizí slova, značky a vlastní jména foneticky
+#  (např. "porše" místo "Porsche", "Inijak" místo "Enyaq"). Tady si je
+#  jednou nadefinuješ a přepis je automaticky opraví.
+#
+#  Formát řádku:   chybně = správně
+#   - porovnává se BEZ ohledu na velikost písmen a jen CELÁ slova
+#   - výsledná velikost písmen je podle pravé strany (Porsche, Enyaq...)
+#   - řádky začínající # jsou komentáře
+#   - soubor se čte při každém přepisu, takže worker není nutné restartovat
+#
+#  Příklady (klidně uprav/přidej vlastní):
+# ---------------------------------------------------------------------
+
+porše = Porsche
+poršé = Porsche
+inijak = Enyaq
+enijak = Enyaq
+eniak = Enyaq
+medert = Medard
+
+# Tipy pro broadcast/newsroom - přidej značky, jména moderátorů, místa:
+# enjoj = Enjoy
+# ostravar = Ostravar
+# přijmení moderátora apod.

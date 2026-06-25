@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PZ AI DAB ALL — automatický dabing</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">🎙️</span> PZ&nbsp;AI&nbsp;<b>DAB&nbsp;ALL</b></div>
+  <div id="status" class="status">Zjišťuji stav…</div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>1 · Vstup</h2>
+    <div id="drop" class="drop">
+      <input id="file" type="file" hidden
+             accept="video/*,audio/*,.mp4,.mkv,.mov,.webm,.avi,.m4v,.mp3,.wav,.m4a">
+      <p class="drop-main">Přetáhni sem video&nbsp;/&nbsp;audio</p>
+      <p class="drop-sub">nebo klikni a vyber · MP4, MKV, MOV, WEBM, AVI, MP3, WAV…</p>
+      <p id="picked" class="picked"></p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>2 · Nastavení dabingu</h2>
+    <div class="grid">
+      <label>Zdrojový jazyk
+        <select id="source_lang"></select>
+      </label>
+      <label>Cílový jazyk
+        <select id="target_lang"></select>
+      </label>
+      <label>Hlasový engine
+        <select id="tts_engine">
+          <option value="piper">Piper — lokální, offline (výchozí)</option>
+          <option value="voicestudio">PZ Voice Studio — Chatterbox / klonování</option>
+        </select>
+      </label>
+      <label>Hlas <span class="hint">(volitelné)</span>
+        <input id="voice" type="text" placeholder="např. cs_CZ-jirka-medium">
+      </label>
+    </div>
+    <div class="row">
+      <fieldset class="seg">
+        <legend>Zvuk originálu</legend>
+        <label class="rad"><input type="radio" name="audio_mode" value="replace" checked> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="voiceover"> Voice-over přes ztlumený originál</label>
+      </fieldset>
+      <div class="checks">
+        <label class="chk"><input id="burn_subs" type="checkbox"> Zapéct titulky do videa</label>
+        <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>
+      </div>
+    </div>
+    <button id="start" class="go" disabled>Spustit dabing</button>
+    <p id="hint" class="formhint"></p>
+  </section>
+
+  <section class="panel">
+    <h2>3 · Zakázky</h2>
+    <div id="jobs" class="jobs"><p class="empty">Zatím žádné zakázky.</p></div>
+  </section>
+</main>
+
+<div id="logbox" class="logbox hidden">
+  <div class="logbar"><span id="logtitle">Log</span><button id="logclose">✕</button></div>
+  <pre id="logtext"></pre>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

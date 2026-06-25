@@ -1,0 +1,184 @@
+"""
+PZ AI DAB ALL — FastAPI backend (sjednocené UI + API pro dabing).
+
+Spuštění (z kořene projektu):
+    python -m uvicorn app.main:app --host 127.0.0.1 --port 8790
+"""
+from __future__ import annotations
+
+import platform
+import shutil
+import sys
+import threading
+from pathlib import Path
+
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from engines.asr import asr_engine, ffmpeg_tools
+from engines.tts import get_backend
+
+from . import config, pipeline
+from .job_manager import JobManager
+
+config.ensure_dirs()
+
+app = FastAPI(title="PZ AI DAB ALL", version="1.0.0")
+jobs = JobManager()
+
+
+class DubRequest(BaseModel):
+    source_lang: "str | None" = None
+    target_lang: "str | None" = None
+    tts_engine: "str | None" = None
+    voice: "str | None" = None
+    audio_mode: "str | None" = None       # replace | voiceover
+    burn_subs: "bool | None" = None
+    llm_correct: "bool | None" = None
+
+
+def _ollama_status() -> dict:
+    """Lehká kontrola, jestli běží Ollama (pro překlad). Neblokuje dlouho."""
+    from engines.asr import config as asr
+    try:
+        import requests
+        base = asr.OLLAMA_URL.rsplit("/api/", 1)[0]
+        r = requests.get(base + "/api/tags", timeout=2)
+        return {"ok": r.ok, "url": asr.OLLAMA_URL, "model": asr.OLLAMA_MODEL}
+    except Exception:
+        return {"ok": False, "url": asr.OLLAMA_URL, "model": asr.OLLAMA_MODEL}
+
+
+@app.get("/api/status")
+def api_status() -> dict:
+    ff = ffmpeg_tools.check_ffmpeg()
+    eng = asr_engine.engine_status()
+    piper_ready, piper_info = get_backend("piper").is_ready()
+    vs_ready, vs_info = get_backend("voicestudio").is_ready()
+    cs_voice = config.find_piper_voice("cs-CZ")
+    return {
+        "app": "PZ AI DAB ALL",
+        "version": app.version,
+        "python": sys.version.split()[0],
+        "python_ok": sys.version_info >= (3, 11),
+        "platform": platform.platform(),
+        "ffmpeg": ff,
+        "parakeet": {"ok": eng["parakeet_ok"], "exe": eng["parakeet_exe"]},
+        "model": {"ok": eng["model_ok"], "name": eng["model_name"]},
+        "ollama": _ollama_status(),
+        "tts": {
+            "default": config.TTS_ENGINE,
+            "piper": {"ok": piper_ready, "info": piper_info,
+                      "cs_voice": bool(cs_voice)},
+            "voicestudio": {"ok": vs_ready, "info": vs_info,
+                            "url": config.VOICESTUDIO_URL},
+        },
+        "source_languages": config.SOURCE_LANGUAGES,
+        "target_languages": config.TARGET_LANGUAGES,
+        "defaults": {"source": config.DEFAULT_SOURCE,
+                     "target": config.DEFAULT_TARGET,
+                     "audio_mode": config.AUDIO_MODE},
+        "ready": ff["ok"] and eng["parakeet_ok"] and eng["model_ok"],
+    }
+
+
+@app.get("/api/voices")
+def api_voices() -> dict:
+    return {"piper": get_backend("piper").list_voices(),
+            "voicestudio": get_backend("voicestudio").list_voices()}
+
+
+@app.post("/api/upload")
+async def api_upload(file: UploadFile = File(...)) -> dict:
+    filename = Path(file.filename or "video").name
+    ext = Path(filename).suffix.lower()
+    if ext not in config.SUPPORTED_INPUT_EXT:
+        raise HTTPException(
+            400, f"Nepodporovaný formát '{ext}'. Povolené: "
+            f"{', '.join(sorted(config.SUPPORTED_INPUT_EXT))}")
+    job = jobs.create(filename, "")
+    upload_path = config.UPLOADS_DIR / f"{job.id}{ext}"
+    with open(upload_path, "wb") as out:
+        shutil.copyfileobj(file.file, out)
+    jobs.update(job.id, upload_path=str(upload_path),
+                is_video=(ext in config.SUPPORTED_VIDEO_EXT))
+    jobs.append_log(jobs.get(job.id), f"Nahráno: {filename} -> {upload_path.name}")
+    return {"job_id": job.id, "job": jobs.get(job.id).to_dict()}
+
+
+@app.post("/api/dub/{job_id}")
+def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job nenalezen.")
+    if job.status not in ("queued", "done", "error"):
+        raise HTTPException(409, "Job už běží.")
+    if not job.upload_path or not Path(job.upload_path).is_file():
+        raise HTTPException(400, "Chybí nahraný soubor pro tento job.")
+
+    upd: dict = {"error": None}
+    if req:
+        for k in ("source_lang", "target_lang", "tts_engine", "voice",
+                  "audio_mode", "burn_subs", "llm_correct"):
+            v = getattr(req, k)
+            if v is not None:
+                upd[k] = v
+    jobs.update(job_id, **upd)
+    jobs.set_status(job_id, "queued", 2)
+    threading.Thread(target=pipeline.run_dub, args=(jobs, job_id),
+                     daemon=True).start()
+    return {"job_id": job_id, "status": "started"}
+
+
+@app.get("/api/jobs")
+def api_jobs() -> dict:
+    return {"jobs": jobs.list()}
+
+
+@app.get("/api/jobs/{job_id}")
+def api_job(job_id: str) -> dict:
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job nenalezen.")
+    return job.to_dict()
+
+
+@app.get("/api/jobs/{job_id}/log")
+def api_job_log(job_id: str) -> PlainTextResponse:
+    if not jobs.get(job_id):
+        raise HTTPException(404, "Job nenalezen.")
+    return PlainTextResponse(jobs.read_log(job_id))
+
+
+@app.get("/api/download/{job_id}/{kind}")
+def api_download(job_id: str, kind: str) -> FileResponse:
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job nenalezen.")
+    mapping = {
+        "video": (job.output_video, "video/mp4", "mp4"),
+        "audio": (job.output_audio, "audio/mpeg", "mp3"),
+        "srt_src": (job.output_srt_src, "application/x-subrip", "src.srt"),
+        "srt_tgt": (job.output_srt_tgt, "application/x-subrip", "srt"),
+        "json": (job.output_json, "application/json", "json"),
+    }
+    entry = mapping.get(kind)
+    if not entry or not entry[0] or not Path(entry[0]).is_file():
+        raise HTTPException(404, f"Výstup '{kind}' pro tento job neexistuje.")
+    path, media, ext = entry
+    name = f"{Path(job.filename).stem}.{ext}"
+    return FileResponse(path, media_type=media, filename=name)
+
+
+@app.delete("/api/jobs/{job_id}")
+def api_delete(job_id: str) -> dict:
+    if not jobs.delete(job_id):
+        raise HTTPException(404, "Job nenalezen.")
+    return {"deleted": job_id}
+
+
+# frontend (mount NAKONEC, ať /api/* má přednost)
+app.mount("/", StaticFiles(directory=str(config.FRONTEND_DIR), html=True),
+          name="static")
