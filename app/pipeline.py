@@ -42,9 +42,8 @@ def run_dub(jobs, job_id: str) -> None:
     upload = Path(job.upload_path)
     target = job.target_lang
 
-    jobs.update(job_id, started_at=datetime.now().isoformat(timespec="seconds"))
-
     try:
+        jobs.update(job_id, started_at=datetime.now().isoformat(timespec="seconds"))
         is_video = job.is_video and ff.has_video(upload)
 
         # 1) extrakce zvuku pro ASR (16 kHz mono)
@@ -159,6 +158,11 @@ def run_dub(jobs, job_id: str) -> None:
         if is_video:
             out_video = config.OUTPUTS_DIR / f"{job_id}.dubbed.mp4"
             mux.mux_video(upload, final_audio, out_video, log=log)
+            if not out_video.is_file() or out_video.stat().st_size == 0:
+                raise RuntimeError(
+                    f"Mux selhal: výstupní video chybí nebo je prázdné ({out_video.name})")
+            # Zaregistruj hned, aby delete() uklidil i při selhání burn.
+            jobs.update(job_id, output_video=str(out_video))
             if job.burn_subs:
                 prog("burning", 96)
                 burned = work / "burned.mp4"
@@ -167,10 +171,9 @@ def run_dub(jobs, job_id: str) -> None:
                     progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)
-            if not out_video.is_file() or out_video.stat().st_size == 0:
-                raise RuntimeError(
-                    f"Mux selhal: výstupní video chybí nebo je prázdné ({out_video.name})")
-            jobs.update(job_id, output_video=str(out_video))
+                if not out_video.is_file() or out_video.stat().st_size == 0:
+                    raise RuntimeError(
+                        f"Burn-in selhal: výstupní video chybí nebo je prázdné ({out_video.name})")
         else:
             out_audio = config.OUTPUTS_DIR / f"{job_id}.dubbed.mp3"
             mux.export_audio(final_audio, out_audio, log=log)
