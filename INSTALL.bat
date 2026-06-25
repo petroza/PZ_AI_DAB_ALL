@@ -94,7 +94,7 @@ if errorlevel 1 (
 
 echo.
 REM 8) Preklad — Ollama nebo argostranslate
-python -c "import requests; import requests; r=requests.get('http://127.0.0.1:11434',timeout=2)" >nul 2>nul
+python -c "import requests; r=requests.get('http://127.0.0.1:11434',timeout=2)" >nul 2>nul
 if errorlevel 1 (
   python -c "import argostranslate" >nul 2>nul
   if errorlevel 1 (

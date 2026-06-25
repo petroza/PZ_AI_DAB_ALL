@@ -50,8 +50,9 @@ for %%D in (uploads outputs jobs logs work) do (
   if exist "%%D\.write_test" ( del "%%D\.write_test" >nul 2>nul & echo [OK] zapis do %%D ) else ( echo [CHYBA] nelze zapsat do %%D )
 )
 
-netstat -ano | findstr ":8790" >nul 2>nul
-if errorlevel 1 (echo [OK] port 8790 je volny) else (echo [!]  port 8790 je OBSAZENY)
+if not defined DAB_PORT set DAB_PORT=8790
+netstat -ano | findstr ":!DAB_PORT! " >nul 2>nul
+if errorlevel 1 (echo [OK] port !DAB_PORT! je volny) else (echo [!]  port !DAB_PORT! je OBSAZENY)
 
 REM Preklad — Ollama nebo argostranslate
 curl -s -m 5 http://127.0.0.1:11434/api/tags >nul 2>nul
