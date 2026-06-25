@@ -68,7 +68,8 @@ def run_dub(jobs, job_id: str) -> None:
         out_segs = []
         for i, s in enumerate(segs):
             txt = (s.get("text") or "").strip()
-            tr = asr_engine.llm_translate(txt, target, log) if txt else txt
+            tr = asr_engine.llm_translate(txt, target, log,
+                                           source=job.source_lang) if txt else txt
             if tr:
                 tr = asr_engine._llm_correct_chunk(tr, target)
             out_segs.append({"start": s.get("start", 0.0),

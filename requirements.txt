@@ -1,12 +1,21 @@
-# PZ AI DAB ALL — jen lehké webové závislosti.
-# ASR řeší parakeet.cpp (binárka, CPU), TTS Piper (binárka/onnx) nebo PZ Voice
-# Studio (HTTP). Záměrně žádný torch / NeMo / velký stack.
+# PZ AI DAB ALL — závislosti
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
 requests>=2.31.0
 
-# --- Volitelné -------------------------------------------------------------
-# Lokální Piper přes pip (alternativa k binárce v tools/piper/). Stáhne i
-# onnxruntime (CPU). Odkomentuj, pokud nechceš binárku ručně:
-# piper-tts>=1.2.0
+# --- Pure-Python ASR fallback (offline, bez Windows binárky) ---------------
+# Automatický přepis přes Whisper large-v3/medium (stáhne model z HuggingFace).
+# Doporučené modely: large-v3 (nejpřesnější), medium (kompromis), small (rychlý).
+# Env: PZ_WHISPER_MODEL=medium  PZ_WHISPER_DEVICE=cpu  PZ_WHISPER_COMPUTE=int8
+faster-whisper>=1.0.3
+
+# --- Offline překlad (fallback za Ollamu) -----------------------------------
+# Lokální překlad bez internetu/GPU. Jazykové balíčky se stáhnou automaticky
+# při prvním překladu (~60 MB na pár, uloží se do ~/.local/share/argos-translate).
+argostranslate>=1.9.6
+
+# --- Lokální Piper přes pip (alternativa k binárce v tools/piper/) ----------
+# Stáhne onnxruntime-cpu automaticky. Hlasové modely (.onnx) se stáhnou
+# automaticky z HuggingFace při prvním použití.
+piper-tts>=1.2.0

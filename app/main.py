@@ -67,6 +67,8 @@ def api_status() -> dict:
         "ffmpeg": ff,
         "parakeet": {"ok": eng["parakeet_ok"], "exe": eng["parakeet_exe"]},
         "model": {"ok": eng["model_ok"], "name": eng["model_name"]},
+        "whisper": {"ok": eng["whisper_ok"], "model": eng.get("whisper_model")},
+        "asr": {"ok": eng["asr_ok"]},
         "ollama": _ollama_status(),
         "tts": {
             "default": config.TTS_ENGINE,
@@ -80,7 +82,7 @@ def api_status() -> dict:
         "defaults": {"source": config.DEFAULT_SOURCE,
                      "target": config.DEFAULT_TARGET,
                      "audio_mode": config.AUDIO_MODE},
-        "ready": ff["ok"] and eng["parakeet_ok"] and eng["model_ok"],
+        "ready": ff["ok"] and eng["asr_ok"] and piper_ready,
     }
 
 

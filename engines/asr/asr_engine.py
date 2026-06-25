@@ -319,8 +319,61 @@ _TRANSLATE_NAMES = {
 }
 
 
-def llm_translate(text: str, target: str, log: LogFn = None) -> str:
-    """Přeloží titulkový řádek do cílového jazyka lokálním LLM (Ollama).
+_ARGOS_LANG: dict = {
+    "auto": "en", "cs-CZ": "cs", "en-US": "en", "uk-UA": "uk",
+    "ru-RU": "ru", "de-DE": "de", "pl-PL": "pl", "sk-SK": "sk",
+    "es-ES": "es", "fr-FR": "fr", "it-IT": "it",
+}
+
+
+def _argos_ensure_pair(src: str, tgt: str) -> bool:
+    """Zajistí nainstalovaný argostranslate balíček pro pár src→tgt."""
+    try:
+        import argostranslate.package as pkg
+        import argostranslate.translate as tr
+        for lang in tr.get_installed_languages():
+            if lang.code == src:
+                if any(t.to_lang.code == tgt for t in lang.translations_to):
+                    return True
+        pkg.update_package_index()
+        avail = pkg.get_available_packages()
+        p = next((x for x in avail if x.from_code == src and x.to_code == tgt), None)
+        if p:
+            pkg.install_from_path(p.download())
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _argos_translate(text: str, src_locale: str, tgt_locale: str) -> str:
+    """Offline překlad přes argostranslate. Zkusí přímý pár, pak pivot přes EN."""
+    try:
+        import argostranslate.translate as tr
+    except ImportError:
+        return text
+    src = _ARGOS_LANG.get(src_locale or "auto", "en")
+    tgt = _ARGOS_LANG.get(tgt_locale)
+    if not tgt or src == tgt:
+        return text
+    try:
+        if _argos_ensure_pair(src, tgt):
+            return tr.translate(text, src, tgt) or text
+        # Pivot přes angličtinu
+        if src != "en" and tgt != "en":
+            if _argos_ensure_pair(src, "en") and _argos_ensure_pair("en", tgt):
+                mid = tr.translate(text, src, "en") or text
+                return tr.translate(mid, "en", tgt) or text
+    except Exception:
+        pass
+    return text
+
+
+def llm_translate(text: str, target: str, log: LogFn = None,
+                  source: str = "auto") -> str:
+    """Přeloží titulkový řádek do cílového jazyka.
+
+    Pořadí: 1) Ollama (online lokální LLM), 2) argostranslate (offline).
     Bezpečný fallback: při chybě vrátí původní text."""
     text = (text or "").strip()
     if not text:
@@ -328,11 +381,8 @@ def llm_translate(text: str, target: str, log: LogFn = None) -> str:
     tname = _TRANSLATE_NAMES.get(target, target)
     try:
         import requests
-    except Exception:
-        return text
-    prompt = (f"Přelož následující titulek do {tname}. Zachovej smysl i styl, "
-              f"vrať POUZE překlad – žádný komentář, žádné uvozovky.\n\n{text}")
-    try:
+        prompt = (f"Přelož následující titulek do {tname}. Zachovej smysl i styl, "
+                  f"vrať POUZE překlad – žádný komentář, žádné uvozovky.\n\n{text}")
         r = requests.post(
             config.OLLAMA_URL,
             json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False,
@@ -341,9 +391,13 @@ def llm_translate(text: str, target: str, log: LogFn = None) -> str:
         )
         r.raise_for_status()
         out = (r.json().get("response") or "").strip().strip('"').strip("`").strip()
-        return out or text
+        if out:
+            return out
     except Exception:
-        return text
+        pass
+    # Fallback: argostranslate (plně offline, automatické stažení balíčku)
+    _log(log, "Ollama nedostupná → zkouším argostranslate offline překlad…")
+    return _argos_translate(text, source, target)
 
 
 def _llm_correct_chunk(text: str, lang: Optional[str] = None) -> str:
@@ -552,34 +606,46 @@ def transcribe_file(input_wav_path: str, language: str, job_id: str,
                     duration: float = 0.0, log: LogFn = None,
                     llm_correct: Optional[bool] = None) -> dict:
     """
-    Přepíše WAV (16 kHz mono PCM) lokální parakeet.cpp binárkou.
+    Přepíše WAV (16 kHz mono PCM).
+
+    Pořadí enginů: 1) parakeet.cpp (Windows binárka + GGUF model),
+                   2) faster-whisper (čistý Python, auto-download z HuggingFace).
 
     Vrací:
       {
         "text": "...",
         "segments": [{"start": 0.0, "end": 2.5, "text": "..."}],
         "words": [ ... pokud jsou k dispozici ... ],
-        "backend": "parakeet.cpp",
+        "backend": "parakeet.cpp" | "faster-whisper",
         "model": "<jméno modelu>"
       }
-
-    Vyhazuje ParakeetNotFoundError / ModelNotFoundError / AsrError.
     """
     exe = config.find_parakeet_exe()
-    if not exe:
-        raise ParakeetNotFoundError(
-            "parakeet.cpp (parakeet-cli) nebyl nalezen. Stáhni Windows build z "
-            "https://github.com/mudler/parakeet.cpp/releases a dej "
-            "parakeet-cli.exe do tools/parakeet/. Viz README."
-        )
     model = config.find_model()
-    if not model:
+
+    # Pokud parakeet není k dispozici, zkus faster-whisper
+    if not exe or not model:
+        from . import whisper_engine
+        if whisper_engine.is_available():
+            reason = "exe chybí" if not exe else "model chybí"
+            _log(log, f"parakeet nedostupný ({reason}) → přepínám na faster-whisper")
+            wav = Path(input_wav_path)
+            if not wav.is_file():
+                raise AsrError(f"Vstupní WAV neexistuje: {wav}")
+            result = whisper_engine.transcribe(input_wav_path, language, duration, log)
+            return _postprocess(result, use_llm=llm_correct, lang=language)
+        if not exe:
+            raise ParakeetNotFoundError(
+                "parakeet.cpp (parakeet-cli) nebyl nalezen a faster-whisper není "
+                "nainstalovaný. Spusť: pip install faster-whisper  — nebo stáhni "
+                "Windows build z https://github.com/mudler/parakeet.cpp/releases."
+            )
         raise ModelNotFoundError(
-            "Nenašel jsem žádný .gguf model ve složce models/. Stáhni "
-            "nemotron-3.5-asr-streaming-0.6b-*.gguf z "
-            "https://huggingface.co/mudler/parakeet-cpp-gguf a dej ho do models/. "
-            "Viz README."
+            "Nenašel jsem žádný .gguf model ve složce models/ a faster-whisper "
+            "není nainstalovaný. Spusť: pip install faster-whisper  — nebo stáhni "
+            "nemotron-3.5-asr-streaming-0.6b-*.gguf z HuggingFace."
         )
+
     wav = Path(input_wav_path)
     if not wav.is_file():
         raise AsrError(f"Vstupní WAV neexistuje: {wav}")
@@ -642,12 +708,18 @@ def transcribe_file(input_wav_path: str, language: str, job_id: str,
 
 def engine_status() -> dict:
     """Stav ASR backendu pro diagnostiku (/api/status)."""
+    from . import whisper_engine
     exe = config.find_parakeet_exe()
     model = config.find_model()
+    parakeet_ok = exe is not None and model is not None
+    whisper_ok = whisper_engine.is_available()
     return {
         "parakeet_exe": str(exe) if exe else None,
         "parakeet_ok": exe is not None,
         "model_path": str(model) if model else None,
         "model_name": model.name if model else None,
         "model_ok": model is not None,
+        "whisper_ok": whisper_ok,
+        "whisper_model": whisper_engine.get_model_name() if whisper_ok else None,
+        "asr_ok": parakeet_ok or whisper_ok,
     }

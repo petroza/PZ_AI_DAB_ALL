@@ -36,15 +36,20 @@ async function loadStatus() {
 
   const bits = [];
   bits.push(s.ffmpeg.ok ? "ffmpeg ✓" : "ffmpeg ✗");
-  bits.push(s.parakeet.ok ? "parakeet ✓" : "parakeet ✗");
-  bits.push(s.model.ok ? "model ✓" : "model ✗");
-  bits.push(s.ollama.ok ? "překlad ✓" : "překlad ✗");
+  if (s.parakeet && s.parakeet.ok) {
+    bits.push("parakeet ✓");
+  } else if (s.whisper && s.whisper.ok) {
+    bits.push(`whisper(${s.whisper.model || "medium"}) ✓`);
+  } else {
+    bits.push("ASR ✗");
+  }
+  bits.push(s.ollama.ok ? "překlad ✓" : "překlad (offline)");
   bits.push(s.tts.piper.ok ? "Piper ✓" : "Piper ✗");
   if (s.tts.piper.ok && !s.tts.piper.cs_voice) bits.push("(chybí CZ hlas)");
   $("status").innerHTML = bits.map((b) =>
     `<span class="${b.includes('✗') ? 'bad' : 'ok'}">${b}</span>`).join(" · ");
   $("hint").textContent = s.ready
-    ? "" : "Některé nástroje chybí — viz README (modely, ffmpeg, parakeet, Piper hlas).";
+    ? "" : "Některé nástroje chybí — spusť: pip install faster-whisper piper-tts  (nebo viz README).";
 }
 
 async function uploadFile(file) {
