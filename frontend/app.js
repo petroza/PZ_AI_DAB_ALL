@@ -128,16 +128,20 @@ async function startDub() {
     burn_subs: $("burn_subs").checked,
     llm_correct: $("llm_correct").checked,
   };
-  const res = await fetch("/api/dub/" + currentJob, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  currentJob = null;
-  $("start").disabled = true;
-  _setPicked(res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění", !res.ok);
-  setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) _setPicked("", false); }, 3000);
-  $("file").value = "";
-  refresh();
+  try {
+    const res = await fetch("/api/dub/" + currentJob, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    currentJob = null;
+    $("start").disabled = true;
+    _setPicked(res.ok ? "Dabing spuštěn ✓" : "Chyba spuštění", !res.ok);
+    setTimeout(() => { if ($("picked").textContent.startsWith("Dabing")) _setPicked("", false); }, 3000);
+    $("file").value = "";
+    refresh();
+  } catch (e) {
+    _setPicked("Chyba spojení: " + e, true);
+  }
 }
 
 function dl(id, kind, label) {
@@ -375,6 +379,7 @@ function _logStop() {
 async function _logFetch(id) {
   try {
     const r = await fetch("/api/jobs/" + id + "/log");
+    if (!r.ok) return;
     const txt = await r.text();
     const el = $("logtext");
     const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 40;
