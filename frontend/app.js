@@ -151,3 +151,25 @@ loadStatus();
 refresh();
 setInterval(refresh, 1500);
 setInterval(loadStatus, 15000);
+
+// --- přepínač světlý / tmavý režim ---
+(function () {
+  const root = document.documentElement;
+  const btn = $("theme-btn");
+
+  function applyTheme(dark) {
+    root.setAttribute("data-theme", dark ? "dark" : "light");
+    btn.textContent = dark ? "🌙" : "☀️";
+    btn.title = dark ? "Přepnout na světlý režim" : "Přepnout na tmavý režim";
+  }
+
+  const saved = localStorage.getItem("theme");
+  const sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(saved ? saved === "dark" : sysDark);
+
+  btn.addEventListener("click", function () {
+    const nowDark = root.getAttribute("data-theme") === "dark";
+    localStorage.setItem("theme", nowDark ? "light" : "dark");
+    applyTheme(!nowDark);
+  });
+})();
