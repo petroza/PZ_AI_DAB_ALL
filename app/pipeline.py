@@ -68,12 +68,16 @@ def run_dub(jobs, job_id: str) -> None:
         out_segs = []
         for i, s in enumerate(segs):
             txt = (s.get("text") or "").strip()
+            start = float(s.get("start") or 0.0)
+            end   = float(s.get("end")   or 0.0)
+            if start >= end:
+                log(f"Přeskakuji segment {i} s neplatným časováním ({start}–{end})")
+                continue
             tr = asr_engine.llm_translate(txt, target, log,
                                            source=job.source_lang) if txt else txt
             if tr:
                 tr = asr_engine._llm_correct_chunk(tr, target)
-            out_segs.append({"start": s.get("start", 0.0),
-                             "end": s.get("end", 0.0), "text": tr})
+            out_segs.append({"start": start, "end": end, "text": tr})
             prog("translating", 40 + (i + 1) / n * 16)
         tgt_result = {
             "text": " ".join(x["text"] for x in out_segs if x["text"]).strip(),

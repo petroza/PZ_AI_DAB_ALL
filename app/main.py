@@ -55,9 +55,11 @@ def _ollama_status() -> dict:
 def api_status() -> dict:
     ff = ffmpeg_tools.check_ffmpeg()
     eng = asr_engine.engine_status()
+    ollama = _ollama_status()
     piper_ready, piper_info = get_backend("piper").is_ready()
     vs_ready, vs_info = get_backend("voicestudio").is_ready()
     cs_voice = config.find_piper_voice("cs-CZ")
+    translate_ok = ollama["ok"] or eng["argostranslate_ok"]
     return {
         "app": "PZ AI DAB ALL",
         "version": app.version,
@@ -69,7 +71,10 @@ def api_status() -> dict:
         "model": {"ok": eng["model_ok"], "name": eng["model_name"]},
         "whisper": {"ok": eng["whisper_ok"], "model": eng.get("whisper_model")},
         "asr": {"ok": eng["asr_ok"]},
-        "ollama": _ollama_status(),
+        "ollama": ollama,
+        "argostranslate": {"ok": eng["argostranslate_ok"],
+                           "langs": eng["argostranslate_langs"]},
+        "translate": {"ok": translate_ok},
         "tts": {
             "default": config.TTS_ENGINE,
             "piper": {"ok": piper_ready, "info": piper_info,

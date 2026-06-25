@@ -713,6 +713,17 @@ def engine_status() -> dict:
     model = config.find_model()
     parakeet_ok = exe is not None and model is not None
     whisper_ok = whisper_engine.is_available()
+    # argostranslate: zjisti dostupnost i počet nainstalovaných jazykových párů
+    try:
+        import argostranslate.translate as _at
+        argos_ok = True
+        argos_langs = len(_at.get_installed_languages())
+    except ImportError:
+        argos_ok = False
+        argos_langs = 0
+    except Exception:
+        argos_ok = False
+        argos_langs = 0
     return {
         "parakeet_exe": str(exe) if exe else None,
         "parakeet_ok": exe is not None,
@@ -722,4 +733,6 @@ def engine_status() -> dict:
         "whisper_ok": whisper_ok,
         "whisper_model": whisper_engine.get_model_name() if whisper_ok else None,
         "asr_ok": parakeet_ok or whisper_ok,
+        "argostranslate_ok": argos_ok,
+        "argostranslate_langs": argos_langs,
     }

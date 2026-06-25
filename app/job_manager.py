@@ -6,6 +6,7 @@ z AutoSRT, rozšířený o pole dabingu.
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -142,6 +143,12 @@ class JobManager:
                         Path(p).unlink(missing_ok=True)
                     except Exception:
                         pass
+            # smaž dočasný work adresář (TTS klipy, zarovnané WAV, apod.)
+            work_dir = config.WORK_DIR / job_id
+            try:
+                shutil.rmtree(work_dir, ignore_errors=True)
+            except Exception:
+                pass
             try:
                 self._job_file(job_id).unlink(missing_ok=True)
             except Exception:
