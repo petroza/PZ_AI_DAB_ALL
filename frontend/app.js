@@ -60,15 +60,20 @@ async function loadStatus() {
     `<span class="${b.includes('✗') ? 'bad' : 'ok'}">${b}</span>`).join(" · ");
   $("hint").textContent = s.ready
     ? "" : "Některé nástroje chybí — spusť: pip install faster-whisper piper-tts  (nebo viz README).";
-  // Naplň datalist hlasů
+}
+
+async function loadVoices() {
   try {
     const vr = await jget("/api/voices");
     const dl = document.getElementById("voices-list");
-    if (dl) {
-      dl.innerHTML = "";
-      const all = [...(vr.piper || []), ...(vr.voicestudio || [])];
-      all.forEach(v => { const o = document.createElement("option"); o.value = v; dl.appendChild(o); });
-    }
+    if (!dl) return;
+    dl.innerHTML = "";
+    const all = [...(vr.piper || []), ...(vr.voicestudio || [])];
+    all.forEach(v => {
+      const id = typeof v === "string" ? v : (v.id || v.name || String(v));
+      if (!id || id === "[object Object]") return;
+      const o = document.createElement("option"); o.value = id; dl.appendChild(o);
+    });
   } catch (_) {}
 }
 
@@ -373,6 +378,7 @@ $("ae-dl").addEventListener("click", _aeDownload);
   $(id).addEventListener("input", () => { _aeUpdatePreview(); _aeSaveSettings(); }));
 
 loadStatus();
+loadVoices();
 refresh();
 setInterval(refresh, 1500);
 setInterval(loadStatus, 15000);
