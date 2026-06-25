@@ -93,10 +93,74 @@ function dl(id, kind, label) {
 // --- After Effects export -------------------------------------------------
 let _aeJobId = null, _aeFilename = "";
 
+function _aeUpdatePreview() {
+  const canvas = $("ae-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const [compW, compH] = ($("ae-res").value || "1920x1080").split("x").map(Number);
+  const posYpct  = parseInt($("ae-posy").value)    || 88;
+  const fontSizePx = parseInt($("ae-fontsize").value) || 80;
+  const perLine  = parseInt($("ae-perline").value)  || 40;
+
+  // Fit canvas into 400×240 box
+  const MAX_W = 400, MAX_H = 240;
+  const aspect = compH / compW;
+  let cW, cH;
+  if (MAX_W * aspect <= MAX_H) { cW = MAX_W; cH = Math.round(MAX_W * aspect); }
+  else { cH = MAX_H; cW = Math.round(MAX_H / aspect); }
+  canvas.width = cW; canvas.height = cH;
+
+  // Background
+  ctx.fillStyle = "#0d1117"; ctx.fillRect(0, 0, cW, cH);
+  // Subtle grid
+  ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1;
+  [0.25,0.5,0.75].forEach(f => {
+    ctx.beginPath(); ctx.moveTo(cW*f,0); ctx.lineTo(cW*f,cH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,cH*f); ctx.lineTo(cW,cH*f); ctx.stroke();
+  });
+  // Y position guide line
+  const posY = cH * (posYpct / 100);
+  ctx.strokeStyle = "rgba(226,162,60,0.55)"; ctx.lineWidth = 1;
+  ctx.setLineDash([6,3]);
+  ctx.beginPath(); ctx.moveTo(0, posY); ctx.lineTo(cW, posY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Sample subtitle text — wrap to perLine
+  const SAMPLE = "Toto je ukázkový titulek pro náhled pozice";
+  const words = SAMPLE.split(" "); const lines = []; let ln = "";
+  for (const w of words) {
+    const c = ln ? ln + " " + w : w;
+    if (c.length <= perLine) { ln = c; } else { if (ln) lines.push(ln); ln = w; }
+  }
+  if (ln) lines.push(ln);
+  const dispLines = lines.slice(0, 2);
+
+  const scale = cW / compW;
+  const fs = Math.max(9, Math.min(Math.round(fontSizePx * scale), 56));
+  const lh = fs * 1.25;
+  const totalH = dispLines.length * lh;
+  const startY = posY - totalH / 2;
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `bold ${fs}px sans-serif`;
+  dispLines.forEach((l, i) => {
+    const y = startY + i * lh + lh / 2;
+    ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(2, fs / 14);
+    ctx.strokeText(l, cW / 2, y);
+    ctx.fillStyle = "#fff"; ctx.fillText(l, cW / 2, y);
+  });
+
+  // Info label
+  ctx.font = "10px monospace"; ctx.fillStyle = "rgba(226,162,60,0.75)";
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.fillText(`Y: ${posYpct}%  ·  ${compW}×${compH}  ·  ${fontSizePx}px`, 7, 5);
+}
+
 function showAeModal(id, filename) {
   _aeJobId = id; _aeFilename = filename;
   $("ae-jobname").textContent = filename;
   $("aebox").classList.remove("hidden");
+  _aeUpdatePreview();
 }
 function _aeChunkLines(text, perLine, maxLines) {
   const words = (text || "").trim().split(/\s+/);
@@ -244,6 +308,8 @@ $("start").addEventListener("click", startDub);
 $("logclose").addEventListener("click", () => $("logbox").classList.add("hidden"));
 $("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
 $("ae-dl").addEventListener("click", _aeDownload);
+["ae-fontsize","ae-perline","ae-posy","ae-res","ae-fps"].forEach(id =>
+  $(id).addEventListener("input", _aeUpdatePreview));
 
 loadStatus();
 refresh();
