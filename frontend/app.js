@@ -90,6 +90,16 @@ function _fillVoiceList() {
     if (!id || id === "[object Object]") return;
     const o = document.createElement("option"); o.value = id; dl.appendChild(o);
   });
+  // auto-suggest default voice for target language if voice field is empty
+  const voiceIn = $("voice");
+  if (voiceIn && !voiceIn.value.trim()) {
+    const tgt = ($("target_lang") || {}).value || "";
+    const prefix = tgt.replace("-", "_");   // cs-CZ -> cs_CZ
+    const ids = src.map(v => typeof v === "string" ? v : (v.id || v.name || ""))
+                   .filter(id => id && id !== "[object Object]");
+    const match = ids.find(id => id.toLowerCase().startsWith(prefix.toLowerCase()));
+    if (match) voiceIn.value = match;
+  }
 }
 
 function _setPicked(msg, isErr) {
@@ -448,6 +458,7 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
 $("tts_engine").addEventListener("change", _fillVoiceList);
+$("target_lang").addEventListener("change", () => { $("voice").value = ""; _fillVoiceList(); });
 $("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });
 $("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
 $("ae-dl").addEventListener("click", _aeDownload);
