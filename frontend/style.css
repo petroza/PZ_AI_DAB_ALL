@@ -39,7 +39,8 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 .row{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;align-items:flex-start}
 .seg{border:1px solid var(--hair);border-radius:10px;padding:8px 14px 12px;margin:0;flex:1 1 280px}
 .seg legend{font-size:.74rem;color:var(--faint);font-family:var(--mono);padding:0 6px}
-.rad,.chk{display:flex;align-items:center;gap:8px;font-size:.88rem;color:var(--ink);margin-top:6px;cursor:pointer}
+.rad,.chk{display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-size:.88rem;color:var(--ink);margin-top:6px;cursor:pointer}
+.rad input,.chk input{margin-top:.2em;flex-shrink:0}
 .checks{display:flex;flex-direction:column;gap:6px;justify-content:center}
 
 .go{margin-top:18px;width:100%;background:var(--new);color:#0a1410;border:none;border-radius:10px;
@@ -77,4 +78,12 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 .logbar button{background:none;border:none;color:var(--dim);font-size:1rem;cursor:pointer}
 #logtext{margin:0;padding:12px 16px;overflow:auto;font-family:var(--mono);font-size:.78rem;
   color:var(--dim);white-space:pre-wrap;word-break:break-word}
-@media (max-width:560px){.jstat{font-size:.72rem}.brand{font-size:.95rem}}
+@media (max-width:560px){
+  .jstat{font-size:.72rem}
+  .brand{font-size:.95rem}
+  select,input[type=text]{padding:11px 10px;font-size:1rem}
+  .dlbtn{padding:10px 14px;font-size:.86rem}
+  .lnk{padding:10px 6px}
+  .rad,.chk{font-size:.94rem;gap:10px}
+  .checks{flex-direction:row;flex-wrap:wrap;gap:12px 18px}
+}
