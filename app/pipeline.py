@@ -187,6 +187,7 @@ def run_dub(jobs, job_id: str) -> None:
         log(f"CHYBA: {e}")
         jobs.update(job_id, error=str(e))
         jobs.set_status(job_id, "error")
+        _cleanup(work)
 
 
 def _cleanup(work: Path) -> None:

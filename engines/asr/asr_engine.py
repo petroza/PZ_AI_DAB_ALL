@@ -365,7 +365,11 @@ def _argos_translate(text: str, src_locale: str, tgt_locale: str) -> str:
         import argostranslate.translate as tr
     except ImportError:
         return text
-    src = _ARGOS_LANG.get(src_locale or "auto", "en")
+    # "auto" bez detekovaného jazyka → překlad by byl z angličtiny, což je špatně
+    # pro neanglický obsah. Raději vrátíme původní text.
+    if (src_locale or "auto") == "auto":
+        return text
+    src = _ARGOS_LANG.get(src_locale, "en")
     tgt = _ARGOS_LANG.get(tgt_locale)
     if not tgt or src == tgt:
         return text
@@ -409,6 +413,9 @@ def llm_translate(text: str, target: str, log: LogFn = None,
     except Exception:
         pass
     # Fallback: argostranslate (plně offline, automatické stažení balíčku)
+    if (source or "auto") == "auto":
+        _log(log, "Ollama nedostupná, zdrojový jazyk neznámý → překlad přeskočen (nastav zdrojový jazyk nebo spusť Ollamu).")
+        return text
     _log(log, "Ollama nedostupná → zkouším argostranslate offline překlad…")
     return _argos_translate(text, source, target)
 

@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
@@ -141,7 +142,8 @@ def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
     if not job.upload_path or not Path(job.upload_path).is_file():
         raise HTTPException(400, "Chybí nahraný soubor pro tento job.")
 
-    upd: dict = {"error": None, "started_at": None, "finished_at": None,
+    queued_at = datetime.now().isoformat(timespec="seconds")
+    upd: dict = {"error": None, "started_at": queued_at, "finished_at": None,
                  "duration": 0.0, "segments_count": 0, "text_preview": ""}
     if req:
         for k in ("source_lang", "target_lang", "tts_engine", "voice",
