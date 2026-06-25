@@ -12,6 +12,7 @@ stáhne se automaticky z https://huggingface.co/rhasspy/piper-voices.
 from __future__ import annotations
 
 import subprocess
+import threading
 import urllib.request
 import wave
 from pathlib import Path
@@ -19,6 +20,9 @@ from typing import Optional
 
 from app import config
 from .base import TTSBackend, TTSError, TTSNotReady, popen_kwargs
+
+_piper_cache: dict = {}   # model_path -> PiperVoice
+_piper_lock = threading.Lock()
 
 
 def _log(log, msg: str) -> None:
@@ -90,9 +94,15 @@ def _synth_pip(text: str, out_wav: Path, model: Path,
     """Syntéza přes piper-tts Python API (bez binárky)."""
     from piper import PiperVoice
     cfg = Path(str(model) + ".json")
-    _log(log, f"PIPER (pip): model={model.name}, length_scale={1.0/speed:.3f}")
-    pv = PiperVoice.load(str(model),
-                         config_path=str(cfg) if cfg.is_file() else None)
+    cache_key = str(model)
+    with _piper_lock:
+        if cache_key not in _piper_cache:
+            _log(log, f"PIPER (pip): načítám model {model.name}…")
+            _piper_cache[cache_key] = PiperVoice.load(
+                str(model), config_path=str(cfg) if cfg.is_file() else None)
+        else:
+            _log(log, f"PIPER (pip): model={model.name} (cache), length_scale={1.0/speed:.3f}")
+    pv = _piper_cache[cache_key]
     length_scale = (1.0 / speed) if speed and speed > 0 else 1.0
     with wave.open(str(out_wav), "wb") as wf:
         pv.synthesize(text, wf, length_scale=length_scale)

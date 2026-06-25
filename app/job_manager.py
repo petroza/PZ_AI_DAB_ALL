@@ -82,6 +82,7 @@ class JobManager:
                 data = json.loads(f.read_text(encoding="utf-8"))
                 if data.get("status") in _RUNNING_STATUSES:
                     data["status"] = "error"
+                    data["progress"] = 0
                     data["error"] = "Job byl přerušen restartem serveru."
                     data["finished_at"] = _now()
                     f.write_text(json.dumps(data, ensure_ascii=False, indent=2),
