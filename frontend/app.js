@@ -312,6 +312,14 @@ async function _aeDownload() {
   } catch (e) { alert("Chyba: " + e); }
   finally { btn.disabled = false; btn.textContent = "⬇ Stáhnout .jsx skript pro After Effects"; }
 }
+function _elapsed(isoStr) {
+  if (!isoStr) return "";
+  const sec = Math.round((Date.now() - new Date(isoStr).getTime()) / 1000);
+  if (sec < 0) return "";
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return ` · ${m}:${s.toString().padStart(2, "0")}`;
+}
+
 function jobCard(j) {
   const st = STATUS[j.status] || j.status;
   const running = !["done", "error"].includes(j.status);
@@ -331,7 +339,7 @@ function jobCard(j) {
   return `<div class="job ${j.status}">
     <div class="jhead">
       <span class="jname" title="${escHtml(j.filename)}">${escHtml(j.filename)}</span>
-      <span class="jstat">${st}${running ? " · " + j.progress + "%" : ""}</span>
+      <span class="jstat">${st}${running ? " · " + j.progress + "%" + _elapsed(j.created_at) : ""}</span>
     </div>
     <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}${metaExtra}</div>
     <div class="bar"><div class="fill" style="width:${j.progress}%"></div></div>

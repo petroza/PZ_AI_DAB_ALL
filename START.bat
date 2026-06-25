@@ -15,6 +15,15 @@ call ".venv\Scripts\activate.bat"
 if not defined DAB_PORT set DAB_PORT=8790
 if not defined DAB_HOST set DAB_HOST=127.0.0.1
 
+netstat -ano | findstr ":!DAB_PORT! " >nul 2>nul
+if not errorlevel 1 (
+  echo [CHYBA] Port !DAB_PORT! je jiz obsazen.
+  echo         Zastav predchozi instanci nebo nastav jiny port:
+  echo         set DAB_PORT=8791  ^&^&  START.bat
+  pause
+  exit /b 1
+)
+
 echo ==================================================
 echo   PZ AI DAB ALL bezi na http://!DAB_HOST!:!DAB_PORT!
 echo   (zastavis ho zde klavesami Ctrl+C)
