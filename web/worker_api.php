@@ -59,6 +59,8 @@ case 'worker_claim':
         'tts_engine' => $picked['tts_engine'], 'voice' => $picked['voice'] ?? '',
         'audio_mode' => $picked['audio_mode'], 'subs_preset' => $picked['subs_preset'] ?? 'classic',
         'burn_subs' => (bool)$picked['burn_subs'],
+        'subs_chars' => (int)($picked['subs_chars'] ?? 0),
+        'subs_maxlines' => (int)($picked['subs_maxlines'] ?? 2),
         'llm_correct' => (bool)$picked['llm_correct'], 'is_video' => (bool)$picked['is_video'],
         'review_text' => (bool)($picked['review_text'] ?? false), 'phase' => $phase,
     ]]);

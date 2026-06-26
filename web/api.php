@@ -46,6 +46,7 @@ case 'upload_init':
         'source_lang' => $sl, 'target_lang' => $tl, 'tts_engine' => $eng,
         'voice' => trim((string)($_POST['voice'] ?? '')),
         'audio_mode' => $am, 'subs_preset' => $preset,
+        'subs_chars' => 0, 'subs_maxlines' => 2,
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
         'review_text' => ((string)($_POST['review_text'] ?? '0')) === '1',
         'llm_correct' => ((string)($_POST['llm_correct'] ?? '1')) === '1',
@@ -104,17 +105,19 @@ case 'delete':
 
 // ---------- REVIEW: úprava textu před dabingem ----------------------------
 case 'segments':
-    // Vrať návrh segmentů {start,end,text,src} k editaci (stav review/approved).
+    // Vrať návrh segmentů {start,end,text,src} k editaci + uložené volby titulků.
     $j = load_job((string)($_GET['id'] ?? ''));
     if (!$j) jsend(['error' => 'Job nenalezen'], 404);
     $p = OUT_DIR . '/' . clean_id($j['id']) . '.seg.json';
     if (!is_file($p)) jsend(['error' => 'Segmenty zatím nejsou připravené'], 404);
     $d = json_decode((string)file_get_contents($p), true);
     jsend(['id' => $j['id'], 'status' => $j['status'] ?? '',
+           'subs_chars' => (int)($j['subs_chars'] ?? 0),
+           'subs_maxlines' => (int)($j['subs_maxlines'] ?? 2),
            'segments' => is_array($d['segments'] ?? null) ? $d['segments'] : []]);
 
-case 'approve':
-    // Ulož upravené segmenty a pošli job do fáze 2 (dabing). Tělo = JSON.
+case 'approve':         // ulož + spusť dabing (fáze 2)
+case 'save_segments':   // jen ulož (zůstává review – pro pozdější úpravu/SRT)
     $in = json_decode((string)file_get_contents('php://input'), true);
     if (!is_array($in)) $in = $_POST;
     $j = load_job((string)($in['id'] ?? ''));
@@ -129,17 +132,40 @@ case 'approve':
         $txt = trim((string)($s['text'] ?? ''));
         $st = (float)($s['start'] ?? 0); $en = (float)($s['end'] ?? 0);
         if ($txt === '' || $en <= $st) continue;
-        $clean[] = ['start' => $st, 'end' => $en, 'text' => mb_substr($txt, 0, 2000)];
+        $row = ['start' => $st, 'end' => $en, 'text' => mb_substr($txt, 0, 2000)];
+        if (isset($s['src'])) $row['src'] = mb_substr((string)$s['src'], 0, 2000);
+        $clean[] = $row;
     }
     if (!$clean) jsend(['error' => 'Po úpravě nezůstal žádný text'], 400);
     file_put_contents(OUT_DIR . '/' . clean_id($j['id']) . '.seg.json',
         json_encode(['segments' => $clean], JSON_UNESCAPED_UNICODE), LOCK_EX);
-    $j['status'] = 'approved';   // worker si ho vyzvedne pro fázi 2
-    $j['progress'] = 50;
+    if (isset($in['subs_chars']))    $j['subs_chars'] = max(0, min(60, (int)$in['subs_chars']));
+    if (isset($in['subs_maxlines'])) $j['subs_maxlines'] = ((int)$in['subs_maxlines'] === 1) ? 1 : 2;
+    if ($action === 'approve') { $j['status'] = 'approved'; $j['progress'] = 50; }   // → dabing
+    else { $j['status'] = 'review'; }                                                // zůstává k úpravě
     $j['error'] = null;
     $j['updated_at'] = now();
     save_job($j);
-    jsend(['ok' => true, 'count' => count($clean)]);
+    jsend(['ok' => true, 'count' => count($clean), 'mode' => $action]);
+
+case 'export_srt':
+    // Stáhni aktuální (upravené) titulky jako SRT – bez nutnosti dabovat.
+    $j = load_job((string)($_GET['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    $p = OUT_DIR . '/' . clean_id($j['id']) . '.seg.json';
+    if (!is_file($p)) jsend(['error' => 'Segmenty nejsou připravené'], 404);
+    $d = json_decode((string)file_get_contents($p), true);
+    $segs = is_array($d['segments'] ?? null) ? $d['segments'] : [];
+    $srt = ''; $i = 1;
+    foreach ($segs as $s) {
+        $txt = trim((string)($s['text'] ?? '')); if ($txt === '') continue;
+        $srt .= $i++ . "\r\n" . srt_ts((float)($s['start'] ?? 0)) . ' --> '
+              . srt_ts((float)($s['end'] ?? 0)) . "\r\n" . $txt . "\r\n\r\n";
+    }
+    $base = safe_filename_base($j['filename'] ?? 'titulky');
+    header('Content-Type: application/x-subrip; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $base . '.cs.srt"');
+    echo $srt; exit;
 
 // ---------- STREAM (přehrávání ve webu, podpora Range pro přetáčení) -------
 case 'stream':

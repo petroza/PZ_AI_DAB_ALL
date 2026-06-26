@@ -437,18 +437,31 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
                 vw, vh = ffmpeg_tools.get_video_size(out_video, log)
                 preset = getattr(job, "subs_preset", "classic")
                 bopts = _burn_preset_opts(preset, vw, vh)
-                # Přizpůsob titulek ŠÍŘCE videa, ať NEPŘETÉKÁ do stran (hlavně
-                # 9:16). Spočítej kolik znaků se vejde na řádek a podle toho
-                # zkrať cue (re-split) i zalomení — platí pro VŠECHNY presety.
+                # Uživatelské volby z editoru: znaků/řádek a počet řádků (1/2).
+                u_chars = int(getattr(job, "subs_chars", 0) or 0)
+                u_lines = int(getattr(job, "subs_maxlines", 0) or 0)
+                if u_lines in (1, 2):
+                    bopts["maxlines"] = u_lines
+                # Přizpůsob titulek ŠÍŘCE videa, ať NEPŘETÉKÁ do stran (hlavně 9:16).
                 if vw and vw > 0:
-                    # ~0.62·velikost = bezpečná šířka znaku (Arial bold + rezerva),
-                    # ×0.92 okraje → řádek se VŽDY vejde, nepřeteče do stran.
-                    fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
-                    bopts["chars"] = min(bopts.get("chars", 42), fit)
-                cue_max = max(14, bopts["chars"] * 2 - 4)   # 2 řádky dané šířky
-                # wrap_chars = stejná šířka → zalomení sedí na úzké video (9:16)
+                    if u_chars > 0:
+                        # uživatel zvolil znaků/řádek → VELIKOST PÍSMA tak, ať se
+                        # to na šířku videa vejde (víc znaků = menší písmo).
+                        bopts["chars"] = u_chars
+                        bopts["size"] = max(14, int(vw * 0.92 / (u_chars * 0.62)))
+                    else:
+                        # ~0.62·velikost = bezpečná šířka znaku (Arial bold + rezerva)
+                        fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
+                        bopts["chars"] = min(bopts.get("chars", 42), fit)
+                elif u_chars > 0:
+                    bopts["chars"] = u_chars
+                # Generování cue podle počtu řádků
+                if bopts.get("maxlines", 2) == 1:
+                    cue_max = max(8, bopts["chars"]); wrapc = 9999      # 1 řádek, bez zalomení
+                else:
+                    cue_max = max(14, bopts["chars"] * 2 - 4); wrapc = bopts["chars"]
                 short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0,
-                                       wrap_chars=bopts["chars"])
+                                       wrap_chars=wrapc)
                 burn_srt = work / "burn.srt"
                 exporters.write_srt({"segments": short or out_segs}, burn_srt)
                 # Animované styly (slovo po slově / karaoke) potřebují segmenty

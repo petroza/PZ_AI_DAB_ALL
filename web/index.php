@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <header class="top">
@@ -106,15 +106,29 @@
         <div id="ed-playhead" class="ed-playhead"></div>
       </div>
     </div>
-    <p class="modal-sub">Pusť ▶, na chybě zastav, <b>klikni na titulek na videu</b> a přepiš. ⏮ / ⏭ skáče po titulcích.</p>
+    <div class="ed-controls">
+      <label>Znaků/řádek
+        <select id="ed-chars">
+          <option value="0">Auto</option>
+          <option value="12">12</option><option value="14">14</option>
+          <option value="16">16</option><option value="18">18</option>
+          <option value="20">20</option><option value="24">24</option>
+        </select>
+      </label>
+      <span class="ed-lines-toggle">Řádky:
+        <button id="ed-line1" class="ed-lbtn" type="button">1</button><button id="ed-line2" class="ed-lbtn active" type="button">2</button>
+      </span>
+      <button id="ed-srt" class="dlbtn" type="button" title="Stáhnout titulky (SRT) bez dabingu">⬇ SRT</button>
+    </div>
+    <p class="modal-sub">Pusť ▶, na chybě zastav, <b>klikni na titulek na videu</b> a přepiš. ⏮ / ⏭ skáče. Vše se <b>ukládá</b> (i bez dabování).</p>
     <div class="modal-foot">
       <span id="ed-status" class="ed-status"></span>
-      <button id="ed-cancel" class="lnk">Zrušit</button>
+      <button id="ed-cancel" class="lnk">Zavřít</button>
       <button id="ed-start" class="go">▶ Dabovat</button>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

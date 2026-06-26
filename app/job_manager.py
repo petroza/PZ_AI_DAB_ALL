@@ -40,7 +40,9 @@ class DubJob:
     voice: Optional[str] = None
     audio_mode: str = config.AUDIO_MODE          # replace | voiceover
     burn_subs: bool = False
-    subs_preset: str = "classic"                 # classic | reels | reels_box
+    subs_preset: str = "classic"                 # classic | reels | reels_box | word | karaoke…
+    subs_chars: int = 0                          # max znaků/řádek (0 = auto dle šířky videa)
+    subs_maxlines: int = 2                       # 1 nebo 2 řádky
     llm_correct: bool = True
 
     status: str = "queued"

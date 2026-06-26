@@ -171,3 +171,12 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
   font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:7px;pointer-events:none;letter-spacing:.2px}
 .ed-len:empty{display:none}
 .ed-len.warn{background:rgba(210,70,50,.9);color:#fff}
+
+/* ---- ovládání editoru: znaků/řádek, řádky, SRT ---- */
+.ed-controls{display:flex;align-items:center;gap:14px;margin:9px 16px 0;flex-wrap:wrap}
+.ed-controls>label{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--dim)}
+.ed-controls select{background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:4px 7px;font:inherit;font-size:.82rem}
+.ed-lines-toggle{display:flex;align-items:center;gap:5px;font-size:.82rem;color:var(--dim)}
+.ed-lbtn{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;width:30px;height:28px;cursor:pointer;font-weight:600}
+.ed-lbtn.active{background:var(--srt);color:#04201f;border-color:var(--srt)}
+#ed-srt{margin-left:auto}

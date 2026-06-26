@@ -59,6 +59,15 @@ function delete_job_files(array $job): void {
     @unlink(job_path($id));
 }
 
+function srt_ts(float $sec): string {
+    if ($sec < 0) $sec = 0.0;
+    $ms = (int)round($sec * 1000);
+    $h = intdiv($ms, 3600000); $ms %= 3600000;
+    $m = intdiv($ms, 60000);   $ms %= 60000;
+    $s = intdiv($ms, 1000);    $ms %= 1000;
+    return sprintf('%02d:%02d:%02d,%03d', $h, $m, $s, $ms);
+}
+
 function safe_filename_base(string $filename): string {
     $base = preg_replace('/[\\\\\/"\r\n]+/', '_', pathinfo($filename, PATHINFO_FILENAME));
     return ($base === '' || $base === null) ? 'download' : $base;
