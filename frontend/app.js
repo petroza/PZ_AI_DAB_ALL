@@ -77,8 +77,17 @@ async function loadStatus() {
   let s;
   try { s = await jget(api("/api/status")); }
   catch {
-    $("status").innerHTML = '<span class="bad">Worker neodpovídá</span>'
-      + ' · spusť START.bat na PC' + (API_BASE ? ' (' + escHtml(API_BASE) + ')' : '');
+    const onForpsi = /appcr?eate\.cloud$/i.test(location.hostname);
+    let msg = '<span class="bad">Worker neodpovídá</span>';
+    if (onForpsi) {
+      msg += ' · Na <b>mobilu</b> tahle adresa nefunguje (prohlížeč nepustí'
+           + ' HTTPS stránku na lokální PC). Otevři appku <b>přímo</b> přes'
+           + ' <b>http://[IP-tvého-PC]:8790/</b> na stejné WiFi'
+           + ' (IP vypíše START.bat). Na PC musí běžet START.bat.';
+    } else {
+      msg += ' · spusť START.bat na PC' + (API_BASE ? ' (' + escHtml(API_BASE) + ')' : '');
+    }
+    $("status").innerHTML = msg;
     return;
   }
   fillSelect($("source_lang"), s.source_languages, s.defaults.source);
