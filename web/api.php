@@ -37,7 +37,8 @@ case 'upload_init':
     $am = (string)($_POST['audio_mode'] ?? 'replace');
     if (!in_array($am, AUDIO_MODES, true)) $am = 'replace';
     $preset = (string)($_POST['subs_preset'] ?? 'classic');
-    if (!in_array($preset, ['classic','reels','reels_box'], true)) $preset = 'classic';
+    if (!in_array($preset, ['classic','reels','reels_box','word','karaoke','karaoke_green','karaoke_box'], true))
+        $preset = 'classic';
     $id = new_id();
     @file_put_contents(UP_DIR . '/' . $id . '.part', '');
     $job = [

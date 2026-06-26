@@ -61,8 +61,12 @@
         <label id="preset-wrap" class="chk hidden" style="display:block">Styl titulků
           <select id="subs_preset">
             <option value="classic">16:9 klasické (dole)</option>
-            <option value="reels">9:16 Reels/Stories — velké tučné (trendy)</option>
+            <option value="reels">9:16 Reels/Stories — velké tučné</option>
             <option value="reels_box">9:16 + podklad (box)</option>
+            <option value="word">⚡ Slovo po slově (velké, trendy)</option>
+            <option value="karaoke">🎤 Karaoke — aktivní slovo žlutě</option>
+            <option value="karaoke_green">🎤 Karaoke — aktivní slovo zeleně</option>
+            <option value="karaoke_box">🎤 Karaoke v boxu (hype)</option>
           </select>
         </label>
         <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>

@@ -37,6 +37,28 @@ def _burn_preset_opts(preset: str, vid_w: int, vid_h: int) -> dict:
     """
     h = vid_h or 1080
     p = (preset or "classic").lower()
+    if p in ("word", "word_by_word", "oneword"):
+        # „Slovo po slově" (ElevenLabs One word after another) – velké JEDNO slovo
+        size = max(30, round(h * 0.072))
+        return {
+            "font": "Arial", "size": size, "bold": True, "align": 2,
+            "marginv": round(h * 0.42),                 # zhruba na střed
+            "outline": max(3, round(size * 0.1)),
+            "maxlines": 1, "chars": 999, "bg": "none",
+            "mode": "word", "hicolor": "white",
+        }
+    if p in ("karaoke", "karaoke_yellow", "karaoke_green", "karaoke_box", "hype"):
+        # Věta se zvýrazněním aktuálního slova (ElevenLabs Yellow highlight/Hype)
+        size = max(22, round(h * 0.046))
+        hic = "green" if p == "karaoke_green" else "yellow"
+        return {
+            "font": "Arial", "size": size, "bold": True, "align": 2,
+            "marginv": round(h * 0.15),
+            "outline": max(2, round(size * 0.12)),
+            "maxlines": 2, "chars": 14,
+            "bg": "box" if p in ("karaoke_box", "hype") else "none", "bgalpha": 35,
+            "mode": "karaoke", "hicolor": hic,
+        }
     if p in ("reels", "reels_box", "social", "9:16", "stories", "tiktok"):
         size = max(22, round(h * 0.046))
         return {
@@ -429,7 +451,15 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
                                        wrap_chars=bopts["chars"])
                 burn_srt = work / "burn.srt"
                 exporters.write_srt({"segments": short or out_segs}, burn_srt)
-                log(f"Zapékání titulků: preset={preset} (video {vw}×{vh}, "
+                # Animované styly (slovo po slově / karaoke) potřebují segmenty
+                # s časy — slova se načasují poměrově uvnitř každého cue.
+                mode = bopts.get("mode", "normal")
+                if mode in ("karaoke", "word"):
+                    bopts["segments"] = [
+                        {"start": c["start"], "end": c["end"],
+                         "text": (c.get("text") or "").replace("\n", " ")}
+                        for c in (short or out_segs)]
+                log(f"Zapékání titulků: preset={preset} (mode={mode}, video {vw}×{vh}, "
                     f"font {bopts['size']}, {bopts['chars']} zn./řádek)")
                 ffmpeg_tools.burn_subtitles(
                     out_video, str(burn_srt), burned, opts=bopts, log=log,

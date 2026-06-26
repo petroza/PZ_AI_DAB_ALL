@@ -360,6 +360,46 @@ def _build_ass_karaoke(segments: list, vid_w: int, vid_h: int, font: str, size: 
     return header + "\n".join(events) + "\n"
 
 
+def _build_ass_word_by_word(segments: list, vid_w: int, vid_h: int, font: str,
+                            size: int, align: int, marginv: int, bold: int,
+                            outline: int, border_style: int, outline_colour: str,
+                            back_colour: str, shadow: int, primary: str) -> str:
+    """ASS – „slovo po slově": vždy jen JEDNO velké slovo (styl ElevenLabs
+    „One word after another"). Časy slov rozloží poměrově dle délky (nemáme
+    časy jednotlivých slov u překladu) + lehký pop-in (\\fad)."""
+    events = []
+    for seg in segments:
+        words = [w for w in (seg.get("text") or "").split() if w]
+        if not words:
+            continue
+        start = float(seg.get("start", 0) or 0)
+        end = float(seg.get("end", start) or start)
+        span = max(0.2, end - start)
+        lens = [max(1, len(w)) for w in words]
+        ssum = sum(lens)
+        t = start
+        for i, (w, l) in enumerate(zip(words, lens)):
+            we = end if i == len(words) - 1 else min(end, t + span * l / ssum)
+            if we <= t:
+                we = t + 0.05
+            events.append(f"Dialogue: 0,{_sec_to_ass(t)},{_sec_to_ass(we)},"
+                          f"Default,,0,0,0,,{{\\fad(60,0)}}{_escape_ass(w)}")
+            t = we
+    header = (
+        "[Script Info]\nScriptType: v4.00+\nWrapStyle: 2\n"
+        f"PlayResX: {vid_w}\nPlayResY: {vid_h}\nScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{size},{primary},{primary},{outline_colour},{back_colour},"
+        f"{bold},0,0,0,100,100,0,0,{border_style},{outline},{shadow},{align},40,40,{marginv},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    return header + "\n".join(events) + "\n"
+
+
 def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
                    output_path: Union[str, Path], opts: Optional[dict] = None,
                    progress_cb: Optional[Callable[[int], None]] = None,
@@ -419,15 +459,21 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
     vid_w, vid_h = get_video_size(video_path, log)
     mode = str(opts.get("mode", "normal"))
     segments = opts.get("segments")
+    HI = {"yellow": "&H0000FFFF", "green": "&H0000FF00", "cyan": "&H00FFFF00",
+          "red": "&H000000FF", "white": "&H00FFFFFF"}
     if mode == "karaoke" and segments:
         # barva vybarveného slova (PrimaryColour); základ = bílá (SecondaryColour)
-        HI = {"yellow": "&H0000FFFF", "green": "&H0000FF00", "cyan": "&H00FFFF00",
-              "red": "&H000000FF", "white": "&H00FFFFFF"}
         primary = HI.get(str(opts.get("hicolor", "yellow")), "&H0000FFFF")
         ass_text = _build_ass_karaoke(
             segments, vid_w, vid_h, font, size, align, marginv, bold, outline,
             chars, maxlines, border_style, outline_colour, back_colour, shadow,
             primary, "&H00FFFFFF")
+    elif mode == "word" and segments:
+        # slovo po slově – barva slova (výchozí bílá)
+        primary = HI.get(str(opts.get("hicolor", "white")), "&H00FFFFFF")
+        ass_text = _build_ass_word_by_word(
+            segments, vid_w, vid_h, font, size, align, marginv, bold, outline,
+            border_style, outline_colour, back_colour, shadow, primary)
     else:
         src_text = srt_path.read_text(encoding="utf-8", errors="replace")
         ass_text = _build_ass(src_text, vid_w, vid_h, font, size, align, marginv,
