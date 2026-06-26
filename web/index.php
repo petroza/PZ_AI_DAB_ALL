@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <header class="top">
@@ -39,7 +39,6 @@
           <option value="local">Lokální gemma4 (offline, výchozí)</option>
           <option value="gemma31b">gemma4:31b (offline, kvalitnější)</option>
           <option value="google">Google Translate (online, zdarma)</option>
-          <option value="deepl">DeepL (online, potřebuje klíč)</option>
         </select>
       </label>
     </div>
@@ -51,7 +50,7 @@
           <option value="voicestudio">PZ Voice Studio — Chatterbox</option>
         </select>
       </label>
-      <label>Hlas <span id="voice-hint" class="hint">(volitelné)</span>
+      <label><span class="cap">Hlas <span id="voice-hint" class="hint">(volitelné)</span></span>
         <input id="voice" type="text" list="voices-list" placeholder="prázdné = klon / např. Daisy Studious">
         <datalist id="voices-list">
           <option value="Daisy Studious"><option value="Alison Dietlinde"><option value="Gracie Wise">
