@@ -1,0 +1,47 @@
+# Glosář odborných termínů a vlastních jmen pro PŘEKLAD (en -> cs).
+# Obecné překladače komolí termíny z oboru (např. "harness" -> "postroj",
+# "GTC" -> "obchodní podmínky"). Pro termíny, které se v překládaném textu
+# objeví, dostane LLM v promptu závazný překlad odsud.
+#
+# Formát:   anglicky = česky      (case-insensitive, celá slova)
+# Řádky s # jsou komentáře. Změny se projeví bez restartu workeru.
+# Delší termíny mají přednost (např. "large language models" před "models").
+# Pro PONECHÁNÍ názvu beze změny napiš stejný text na obě strany (GTC = GTC).
+
+# --- AI / agenti / LLM ---
+harness = orchestrační vrstva
+harnesses = orchestrační vrstvy
+agent harness = agentní orchestrační vrstva
+orchestrate = řídit
+agentic = agentní
+agent company = agentní firma
+agents as a service = agenti jako služba
+large language models = velké jazykové modely
+large language model = velký jazykový model
+LLM = velký jazykový model
+LLMs = velké jazykové modely
+runtime = běhové prostředí
+workload = výpočetní úloha
+workloads = výpočetní úlohy
+toolkit = sada nástrojů
+inference = inference
+fine-tuning = doladění
+prompt = prompt
+token = token
+tokens = tokeny
+embedding = embedding
+context window = kontextové okno
+open source = open source
+open-source = open source
+guardrails = pojistky
+benchmark = benchmark
+
+# --- vlastní jména / značky / zkratky (ponechat) ---
+NVIDIA = NVIDIA
+GTC = GTC
+CUDA = CUDA
+CUDA X = CUDA X
+GPU = GPU
+CPU = CPU
+API = API
+SDK = SDK

@@ -81,6 +81,19 @@ def download_source(rid, dest: Path):
         raise RuntimeError("stažený zdroj je prázdný")
 
 
+def download_output(rid, kind, dest: Path):
+    """Stáhne JIŽ hotový výstup (video/srt) z relay – pro dodatečné zapečení titulků."""
+    with requests.get(API, params={"action": "worker_output", "id": rid, "kind": kind},
+                      headers=HEAD, stream=True, timeout=900) as r:
+        r.raise_for_status()
+        with open(dest, "wb") as f:
+            for c in r.iter_content(1 << 16):
+                if c:
+                    f.write(c)
+    if dest.stat().st_size == 0:
+        raise RuntimeError(f"stažený výstup ({kind}) je prázdný")
+
+
 def upload_result(rid, data, file_specs, timeout=900):
     last = None
     for attempt in range(3):
@@ -198,6 +211,39 @@ def _retranslate(job):
     print(f"[RETRANS] {rid} -> review ({tr}, {len(new)} segmentu)")
 
 
+def _reburn(job):
+    """Dodatečně zapéct titulky do JIŽ hotového videa – stáhne výstup + SRT z relay,
+    zapeče titulky, nahraje zpět. Bez nového nahrávání/dabingu (uživatel zapomněl
+    zaškrtnout „Zapéct titulky")."""
+    rid = job["id"]
+    appcfg.ensure_dirs()
+    progress(rid, 10)
+    vid = appcfg.UPLOADS_DIR / f"reburn_{rid}.mp4"
+    srt = appcfg.OUTPUTS_DIR / f"reburn_{rid}.srt"
+    out = appcfg.OUTPUTS_DIR / f"reburn_out_{rid}.mp4"
+    try:
+        download_output(rid, "video", vid)
+        download_output(rid, "srt_tgt", srt)
+        progress(rid, 40)
+        pipeline.burn_existing_video(
+            str(vid), str(srt), str(out),
+            preset=job.get("subs_preset") or "classic",
+            subs_chars=int(job.get("subs_chars") or 0),
+            subs_maxlines=int(job.get("subs_maxlines") or 0),
+            subs_size=str(job.get("subs_size") or ""))
+        progress(rid, 90)
+        if not out.is_file() or out.stat().st_size == 0:
+            raise RuntimeError("zapékání nevytvořilo výstup")
+        upload_result(rid, {}, {"video": (f"{rid}.mp4", str(out))})
+        print(f"[REBURN] {rid} hotovo (titulky zapečeny do videa)")
+    finally:
+        for p in (vid, srt, out):
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
 def process(job):
     rid = job["id"]
     ext = (job.get("ext") or "mp4").lower()
@@ -206,6 +252,10 @@ def process(job):
 
     if phase == "retranslate":           # jen přeložit znovu, bez videa/ASR
         _retranslate(job)
+        return
+
+    if phase == "burn":                  # jen dodatečně zapéct titulky do videa
+        _reburn(job)
         return
 
     progress(rid, 5)

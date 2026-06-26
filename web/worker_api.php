@@ -25,6 +25,10 @@ case 'worker_claim':
             $picked = $j; $phase = 'retranslate'; break;
         }
     }
+    // 0b) dodatečné zapečení titulků do JIŽ hotového videa (bez nového nahrávání)
+    if (!$picked) foreach ($jobs as $j) {
+        if (!empty($j['reburn'])) { $picked = $j; $phase = 'burn'; break; }
+    }
     // 1) approved (uživatel schválil upravený text) → fáze 2: dabing
     if (!$picked) foreach ($jobs as $j) {
         if (($j['status'] ?? '') === 'approved') { $picked = $j; $phase = 'dub'; break; }
@@ -55,6 +59,7 @@ case 'worker_claim':
         $picked['progress'] = 3;
         $picked['phase'] = $phase;          // uloženo pro případnou obnovu osiřelého jobu
         if ($phase === 'retranslate') unset($picked['retranslate']);   // flag spotřebován
+        if ($phase === 'burn') unset($picked['reburn']);               // flag spotřebován
         $picked['updated_at'] = now();
         save_job($picked);
     }
@@ -122,6 +127,20 @@ case 'worker_source':
     readfile($path);
     exit;
 
+case 'worker_output':
+    // Worker si stáhne JIŽ hotový výstup (pro dodatečné zapečení titulků).
+    $j = load_job((string)($_GET['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    $kind = (string)($_GET['kind'] ?? 'video');
+    $map = ['video' => 'mp4', 'audio' => 'mp3', 'srt_tgt' => 'srt'];
+    if (!isset($map[$kind])) jsend(['error' => 'Neplatný typ'], 400);
+    $path = OUT_DIR . '/' . clean_id($j['id']) . '.' . $map[$kind];
+    if (!is_file($path)) jsend(['error' => 'Výstup neexistuje'], 404);
+    header('Content-Type: application/octet-stream');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
+    exit;
+
 case 'worker_progress':
     $j = load_job((string)($_POST['id'] ?? ''));
     if (!$j) jsend(['error' => 'Job nenalezen'], 404);
@@ -144,16 +163,17 @@ case 'worker_result':
                 $outputs[$field] = true;
         }
     }
-    $j['outputs'] = $outputs;
-    $j['text_preview'] = (string)($_POST['text_preview'] ?? '');
+    // sluč s existujícími výstupy (re-burn nahrává jen video → nesmí zahodit SRT)
+    $j['outputs'] = array_merge((array)($j['outputs'] ?? []), $outputs);
+    if (isset($_POST['text_preview'])) $j['text_preview'] = (string)$_POST['text_preview'];
     if (isset($_POST['duration'])) $j['duration'] = (float)$_POST['duration'];
     $j['status'] = 'done';
     $j['progress'] = 100;
     $j['error'] = null;
     $j['finished_at'] = now();
     $j['updated_at'] = now();
-    // zdrojové video už netřeba (šetří místo na hostingu)
-    @unlink(UP_DIR . '/' . $id . '.' . clean_ext($j['ext'] ?? ''));
+    // Zdrojové video PONECHÁVÁME, aby šlo zakázku „Předabovat" s jiným nastavením
+    // (jiný hlas/engine…) bez nového nahrávání. Smaže se až při smazání zakázky.
     save_job($j);
     jsend(['ok' => true]);
 

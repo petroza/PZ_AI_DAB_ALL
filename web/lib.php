@@ -59,11 +59,37 @@ function delete_job_files(array $job): void {
     @unlink(job_path($id));
 }
 
+function glossary_invariant_terms(): array {
+    // Invariantní názvy/zkratky z translation_glossary.txt (řádky en == cs:
+    // NVIDIA, GTC, CUDA X…). Chrání se před Googlem placeholderem (jinak GTC→VOP).
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $cache = [];
+    $f = __DIR__ . '/translation_glossary.txt';
+    if (is_file($f)) {
+        foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#' || strpos($line, '=') === false) continue;
+            [$en, $cs] = array_map('trim', explode('=', $line, 2));
+            if ($en !== '' && mb_strtolower($en) === mb_strtolower($cs)) $cache[] = $en;
+        }
+        usort($cache, fn($a, $b) => mb_strlen($b) - mb_strlen($a));  // delší první
+    }
+    return $cache;
+}
+
 function google_translate_php(string $text, string $sl, string $tl): ?string {
     // Google Translate přes veřejný endpoint (zdarma, bez klíče). Pro re-překlad
     // přímo z relay (Forpsi má outbound HTTP) → okamžitý výsledek bez workeru.
     $text = trim($text);
     if ($text === '') return null;
+    // Ochrana invariantních názvů placeholdery ⟦N⟧ (přežijí Google).
+    $restore = [];
+    foreach (glossary_invariant_terms() as $i => $term) {
+        $ph = "\u{27E6}$i\u{27E7}";
+        $new = preg_replace('/(?<!\w)' . preg_quote($term, '/') . '(?!\w)/iu', $ph, $text);
+        if ($new !== null && $new !== $text) { $text = $new; $restore[$ph] = $term; }
+    }
     $url = 'https://translate.googleapis.com/translate_a/single?client=gtx'
          . '&sl=' . rawurlencode($sl ?: 'auto') . '&tl=' . rawurlencode($tl ?: 'cs')
          . '&dt=t&q=' . rawurlencode($text);
@@ -86,6 +112,7 @@ function google_translate_php(string $text, string $sl, string $tl): ?string {
     $out = '';
     foreach ($d[0] as $seg) { if (isset($seg[0])) $out .= $seg[0]; }
     $out = trim($out);
+    if ($restore) $out = strtr($out, $restore);   // vrať chráněné názvy
     return $out !== '' ? $out : null;
 }
 
@@ -105,7 +132,10 @@ function safe_filename_base(string $filename): string {
 
 // Veřejná podoba jobu pro UI.
 function public_job(array $j): array {
+    $ext = clean_ext($j['ext'] ?? '');
+    $has_source = $ext !== '' && is_file(UP_DIR . '/' . clean_id($j['id'] ?? '') . '.' . $ext);
     return [
+        'has_source'   => $has_source,   // lze „Předabovat" (zdroj ještě existuje)
         'id'           => $j['id'] ?? '',
         'filename'     => $j['filename'] ?? '',
         'source_lang'  => $j['source_lang'] ?? 'auto',

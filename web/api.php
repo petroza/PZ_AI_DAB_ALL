@@ -216,6 +216,71 @@ case 'retranslate':
     save_job($j);
     jsend(['ok' => true, 'done' => false, 'queued' => true]);
 
+case 'reburn':
+    // Dodatečně zapéct titulky do JIŽ hotového videa (když uživatel zapomněl
+    // zaškrtnout „Zapéct titulky" – nemusí nahrávat video znovu). Worker stáhne
+    // hotové video + SRT z relay, zapeče titulky a nahraje výsledek zpět.
+    $in = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($in)) $in = $_POST;
+    $j = load_job((string)($in['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    if (($j['status'] ?? '') !== 'done')
+        jsend(['error' => 'Zapéct titulky lze jen u hotové zakázky'], 400);
+    if (empty(($j['outputs'] ?? [])['video']))
+        jsend(['error' => 'Tato zakázka nemá video'], 400);
+    $srt = OUT_DIR . '/' . clean_id($j['id']) . '.srt';
+    if (!is_file($srt))
+        jsend(['error' => 'K této zakázce nejsou titulky (SRT)'], 400);
+    $preset = (string)($in['subs_preset'] ?? ($j['subs_preset'] ?? 'classic'));
+    if (!in_array($preset, ['classic','reels','reels_box','word','karaoke','karaoke_green','karaoke_box'], true))
+        $preset = 'classic';
+    $j['subs_preset'] = $preset;
+    if (isset($in['subs_size'])) {
+        $sz = (string)$in['subs_size'];
+        $j['subs_size'] = in_array($sz, ['small','medium','large','xl'], true) ? $sz : '';
+    }
+    $j['reburn'] = true;
+    $j['status'] = 'processing';
+    $j['progress'] = 90;
+    $j['stage'] = 'burning';
+    $j['error'] = null;
+    $j['updated_at'] = now();
+    save_job($j);
+    jsend(['ok' => true, 'queued' => true]);
+
+case 'redub':
+    // Předabovat hotovou zakázku s JINÝM nastavením (jiný hlas/engine/režim…)
+    // bez nového nahrávání – znovu se spustí plný dabing ze zachovaného zdroje.
+    $in = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($in)) $in = $_POST;
+    $j = load_job((string)($in['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    if (($j['status'] ?? '') !== 'done')
+        jsend(['error' => 'Předabovat lze jen hotovou zakázku'], 400);
+    $ext = clean_ext($j['ext'] ?? '');
+    if ($ext === '' || !is_file(UP_DIR . '/' . clean_id($j['id']) . '.' . $ext))
+        jsend(['error' => 'Zdrojové video už není k dispozici – nahraj ho prosím znovu'], 400);
+    // aktualizuj jen parametry, které dorazí (a jsou platné)
+    if (isset($in['tts_engine']) && in_array((string)$in['tts_engine'], TTS_ENGINES, true)) $j['tts_engine'] = (string)$in['tts_engine'];
+    if (isset($in['voice']))      $j['voice'] = trim((string)$in['voice']);
+    if (isset($in['audio_mode']) && in_array((string)$in['audio_mode'], AUDIO_MODES, true)) $j['audio_mode'] = (string)$in['audio_mode'];
+    if (isset($in['translator']) && in_array((string)$in['translator'], ['local','gemma31b','google'], true)) $j['translator'] = (string)$in['translator'];
+    if (isset($in['target_lang']) && in_array((string)$in['target_lang'], TARGET_LANGS, true)) $j['target_lang'] = (string)$in['target_lang'];
+    if (isset($in['burn_subs']))  $j['burn_subs'] = ((string)$in['burn_subs'] === '1' || $in['burn_subs'] === true);
+    if (isset($in['subs_preset']) && in_array((string)$in['subs_preset'], ['classic','reels','reels_box','word','karaoke','karaoke_green','karaoke_box'], true)) $j['subs_preset'] = (string)$in['subs_preset'];
+    // znovu spustit plný dabing (bez review, ze zachovaného zdroje)
+    $j['review_text'] = false;
+    $j['retranslate'] = false;
+    unset($j['reburn']);
+    $j['status'] = 'pending';
+    $j['progress'] = 0;
+    $j['phase'] = 'full';
+    $j['error'] = null;
+    $j['finished_at'] = null;
+    $j['updated_at'] = now();
+    save_job($j);
+    jsend(['ok' => true, 'queued' => true]);
+
 // ---------- STREAM (přehrávání ve webu, podpora Range pro přetáčení) -------
 case 'stream':
     $j = load_job((string)($_GET['id'] ?? ''));

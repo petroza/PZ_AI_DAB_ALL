@@ -29,3 +29,15 @@ iPad = Ajped
 Toyota = Tojota
 Mazda = Mazda
 Audi = Audi
+
+# AI / tech názvy (XTTS jinak komolí: NVIDIA->„mivie", CUDA->„Čula")
+NVIDIA = Envídia
+CUDA = Kúda
+GTC = Dží tý sí
+GPU = dží pí jů
+CPU = cé pé jů
+API = ej pí áj
+SDK = es dý ká
+NVLink = en ví link
+LLM = el el em
+ChatGPT = Čet dží pí tý

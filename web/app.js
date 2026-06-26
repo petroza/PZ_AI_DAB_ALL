@@ -26,12 +26,44 @@ function fillSel(sel, codes, def){
   codes.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=LANG[c]||c;if(c===def)o.selected=true;sel.appendChild(o);});
 }
 
+// Nabídka hlasů podle zvoleného TTS enginu (čistý <select>, ne datalist —
+// ten se rozbalil jen jednou a pral se s autofillem prohlížeče). Hodnota
+// "" = klonovat původní hlas (XTTS) / automaticky dle jazyka (Piper).
+const VOICES = {
+  xtts: [
+    ["", "🔊 Klonovat původní hlas (doporučeno)"],
+    ["Daisy Studious", "Daisy Studious — ženský"],
+    ["Alison Dietlinde", "Alison Dietlinde — ženský"],
+    ["Gracie Wise", "Gracie Wise — ženský"],
+    ["Alexandra Hisakawa", "Alexandra Hisakawa — ženský"],
+    ["Damien Black", "Damien Black — mužský"],
+    ["Aaron Dreschner", "Aaron Dreschner — mužský"],
+    ["Baldur Sanjin", "Baldur Sanjin — mužský"],
+    ["Viktor Eka", "Viktor Eka — mužský"],
+  ],
+  piper: [["", "Automaticky dle cílového jazyka"]],
+  voicestudio: [["", "Výchozí hlas (Chatterbox)"]],
+};
+function fillVoicesFor(engId, voiceId, hintId, want){
+  const engEl=$(engId), sel=$(voiceId);
+  if(!engEl||!sel) return;
+  const eng=engEl.value, list=VOICES[eng]||VOICES.piper, prev=(want!=null?want:sel.value);
+  sel.innerHTML="";
+  list.forEach(([v,label])=>{const o=document.createElement("option");o.value=v;o.textContent=label;sel.appendChild(o);});
+  if([...sel.options].some(o=>o.value===prev)) sel.value=prev;   // zachovej volbu, pokud existuje
+  const h=hintId&&$(hintId);
+  if(h) h.textContent = eng==="xtts" ? "(prázdné = klonovat původní mluvčí)"
+       : eng==="piper" ? "(automaticky)" : "(volitelné)";
+}
+function fillVoices(){ fillVoicesFor("tts_engine","voice","voice-hint"); }
+
 async function loadStatus(){
   let s;
   try{ s=await jget(API+"?action=status"); }
   catch{ $("status").innerHTML='<span class="bad">Server neodpovídá</span>'; return; }
   fillSel($("source_lang"), s.source_langs, "auto");
   fillSel($("target_lang"), s.target_langs, "cs-CZ");
+  if($("rd-target")) fillSel($("rd-target"), s.target_langs, "cs-CZ");
   $("status").innerHTML='<span class="ok">'+esc(s.user||"")+' · připojeno</span>';
 }
 
@@ -117,6 +149,18 @@ function jobCard(j){
     if(o.audio) outs+=dlbtn(j.id,"audio","⬇ Audio");
     if(o.srt_tgt) outs+=dlbtn(j.id,"srt_tgt","⬇ Titulky");
     if(o.srt_src) outs+=dlbtn(j.id,"srt_src","⬇ Titulky (zdroj)");
+    // dodatečné zapečení titulků do videa (když uživatel zapomněl zaškrtnout)
+    if(o.video && o.srt_tgt){
+      outs+='<span class="rb"><select class="rb-preset" title="Styl titulků">'
+        +'<option value="classic">16:9 dole</option>'
+        +'<option value="reels">9:16 velké</option>'
+        +'<option value="reels_box">9:16 box</option>'
+        +'<option value="karaoke">karaoke</option>'
+        +'<option value="word">slovo po slově</option>'
+        +'</select><button class="dlbtn" data-reburn="'+esc(j.id)+'">📝 Zapéct titulky do videa</button></span>';
+    }
+    // předabovat s jiným nastavením (jen když je zdroj ještě k dispozici)
+    if(j.has_source) outs+='<button class="dlbtn" data-redub="'+esc(j.id)+'" style="border-color:var(--voice);color:var(--voice)">🔄 Předabovat</button>';
   }
   const err=j.error?'<div class="err">'+esc(j.error)+'</div>':"";
   const dir=(LANG[j.source_lang]||j.source_lang)+" → "+(LANG[j.target_lang]||j.target_lang);
@@ -131,9 +175,10 @@ function jobCard(j){
     +playBox+'</div>';
 }
 
-let lastSig="", timer=null;
+let lastSig="", timer=null, jobsById={};
 async function refresh(){
   let d; try{ d=await jget(API+"?action=list"); }catch{ return false; }
+  jobsById={}; d.jobs.forEach(j=>{jobsById[j.id]=j;});   // pro re-dub předvyplnění
   const sig=JSON.stringify(d.jobs.map(j=>[j.id,j.status,j.progress]));
   const running=d.jobs.some(j=>!["done","error"].includes(j.status));
   if(!running && sig===lastSig) return false;
@@ -154,12 +199,79 @@ async function delJob(id){
   await fetch(API,{method:"POST",body:fd}); refresh();
 }
 
+// Dodatečně zapéct titulky do hotového videa (worker stáhne výstup+SRT, zapeče,
+// nahraje zpět – bez nového nahrávání). Job se vrátí do „zpracovává se".
+async function reburnJob(id, preset, btn){
+  if(btn){ btn.disabled=true; btn.textContent="Zařazuji…"; }
+  try{
+    const r=await fetch(API+"?action=reburn",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id:id, subs_preset:preset})});
+    const j=await r.json();
+    if(j.error) throw new Error(j.error);
+    refresh(); schedule(1200);
+  }catch(e){
+    alert("Zapékání se nepodařilo zařadit: "+e.message);
+    if(btn){ btn.disabled=false; btn.textContent="📝 Zapéct titulky do videa"; }
+  }
+}
+
+// ---- předabovat hotovou zakázku s jiným nastavením (bez nahrávání) ----
+let rdId=null;
+function openRedub(id){
+  const j=jobsById[id]; if(!j) return;
+  rdId=id;
+  $("rd-status").textContent=""; $("rd-run").disabled=false;
+  $("rd-engine").value=j.tts_engine||"piper";
+  fillVoicesFor("rd-engine","rd-voice","rd-voice-hint", j.voice||"");
+  if($("rd-target")) $("rd-target").value=j.target_lang||"cs-CZ";
+  $("rd-translator").value=j.translator||"local";
+  const am=document.querySelector('input[name=rd_audio][value="'+(j.audio_mode==="voiceover"?"voiceover":"replace")+'"]');
+  if(am) am.checked=true;
+  $("rd-burn").checked=!!j.burn_subs;
+  $("rd-preset-wrap").classList.toggle("hidden", !j.burn_subs);
+  if(j.subs_preset) $("rd-preset").value=j.subs_preset;
+  $("redubmodal").classList.remove("hidden");
+}
+function closeRedub(){ $("redubmodal").classList.add("hidden"); rdId=null; }
+async function runRedub(){
+  if(!rdId) return;
+  $("rd-run").disabled=true; $("rd-status").textContent="Spouštím nový dabing…";
+  const body={ id:rdId,
+    tts_engine:$("rd-engine").value, voice:$("rd-voice").value,
+    translator:$("rd-translator").value,
+    audio_mode:(document.querySelector('input[name=rd_audio]:checked')||{}).value||"replace",
+    burn_subs:$("rd-burn").checked?"1":"0", subs_preset:$("rd-preset").value };
+  if($("rd-target")) body.target_lang=$("rd-target").value;
+  try{
+    const r=await fetch(API+"?action=redub",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json(); if(j.error) throw new Error(j.error);
+    closeRedub(); refresh(); schedule(1200);
+  }catch(e){ $("rd-status").textContent="Chyba: "+e.message; $("rd-run").disabled=false; }
+}
+
 // ---- editor titulků na videu (video-centric, jako ElevenLabs) ----
 let edId=null, edSegs=[], edLast=null, edEditing=false, edMaxChars=0;
 let edChars=0, edLines=2, edSize="", edDirty=false, edEC=16;   // znaků/řádek, řádky, velikost, změny, eff. znaků
 const ED_SIZE={small:0.035, medium:0.046, large:0.062, xl:0.08};   // podíl VÝŠKY videa
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
 function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
+// České typografické pravidlo: krátká předložka/spojka nesmí viset na konci
+// řádku/cue – přesune se ke slovu za sebou (jako v zapékání na serveru).
+const CZ_NOBREAK=new Set(["k","s","v","z","o","u","a","i","ke","ve","se","ze","ku",
+  "do","na","za","po","od","ob","pro","při","nad","pod","bez","přes","že","aby"]);
+function normW(w){return (w||"").replace(/^[.,!?…:;"'()\[\]„“”‚‘»«]+|[.,!?…:;"'()\[\]„“”‚‘»«]+$/g,"").toLowerCase();}
+function carryDangling(parts){
+  for(let i=0;i<parts.length-1;i++){
+    const ws=parts[i].split(/\s+/).filter(Boolean);
+    if(ws.length>=2 && CZ_NOBREAK.has(normW(ws[ws.length-1]))){
+      parts[i]=ws.slice(0,-1).join(" ");
+      parts[i+1]=ws[ws.length-1]+" "+parts[i+1];
+    }
+  }
+  return parts;
+}
 // Rozseká segment na KRÁTKÉ titulky (cue) jako se zapéče do videa – stejné
 // dělení, ať náhled = výstup (ne zeď textu).
 function edSplitCues(seg, perLine, maxLines){
@@ -173,6 +285,7 @@ function edSplitCues(seg, perLine, maxLines){
     if(cur && ".!?…".includes(cur[cur.length-1]) && cur.length>=Math.min(18,maxChars)){ parts.push(cur); cur=""; }
   }
   if(cur) parts.push(cur);
+  carryDangling(parts);
   const total=parts.reduce((a,p)=>a+p.length,0)||1, dur=end-start, cues=[]; let t=start;
   parts.forEach((p,i)=>{ const ce=(i===parts.length-1)?end:t+dur*(p.length/total); cues.push({start:t,end:ce,text:p}); t=ce; });
   return cues;
@@ -192,6 +305,7 @@ function edWrapLines(text, perLine, maxLines){
     else cur=cand;
   }
   if(cur) lines.push(cur);
+  carryDangling(lines);
   return lines.join("\n");
 }
 function edRender(){   // skutečné rozměry zobrazeného videa (kvůli letterboxu)
@@ -387,6 +501,11 @@ $("jobs").addEventListener("click",e=>{
   if(del){ delJob(del.getAttribute("data-del")); return; }
   const ed=e.target.closest("[data-edit]");
   if(ed){ openEditor(ed.getAttribute("data-edit")); return; }
+  const rb=e.target.closest("[data-reburn]");
+  if(rb){ const sel=rb.parentNode.querySelector(".rb-preset");
+          reburnJob(rb.getAttribute("data-reburn"), sel?sel.value:"classic", rb); return; }
+  const rd=e.target.closest("[data-redub]");
+  if(rd){ openRedub(rd.getAttribute("data-redub")); return; }
   const pl=e.target.closest("[data-play]");
   if(pl){
     const id=pl.getAttribute("data-play"), kind=pl.getAttribute("data-kind")||"video";
@@ -399,8 +518,16 @@ $("jobs").addEventListener("click",e=>{
     }
   }
 });
-$("voice").addEventListener("focus",()=>{const h=$("voice-hint");if(h&&$("tts_engine").value==="xtts")h.textContent="prázdné=klon · Ž: Daisy/Alison/Gracie · M: Damien/Aaron/Baldur";});
+$("tts_engine").addEventListener("change",fillVoices);
+fillVoices();
 $("burn_subs").addEventListener("change",e=>{$("preset-wrap").classList.toggle("hidden",!e.target.checked);});
+// re-dub modal
+$("rd-engine").addEventListener("change",()=>fillVoicesFor("rd-engine","rd-voice","rd-voice-hint"));
+$("rd-burn").addEventListener("change",e=>{$("rd-preset-wrap").classList.toggle("hidden",!e.target.checked);});
+$("rd-run").addEventListener("click",runRedub);
+$("rd-close").addEventListener("click",closeRedub);
+$("rd-cancel").addEventListener("click",closeRedub);
+$("redubmodal").addEventListener("click",e=>{ if(e.target.id==="redubmodal") closeRedub(); });
 
 (function(){const root=document.documentElement,btn=$("theme-btn");
   function ap(d){root.setAttribute("data-theme",d?"dark":"light");btn.textContent=d?"🌙":"☀️";}

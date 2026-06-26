@@ -99,18 +99,55 @@ def _merge_segments(segs, min_slot: float = 2.8, max_slot: float = 9.0) -> list:
     return out
 
 
+# České typografické pravidlo: jednopísmenné předložky/spojky (k, s, v, z, o, u,
+# a, i) a krátké předložky NESMÍ zůstat na konci řádku/titulku – patří ke slovu
+# za nimi. Drží titulky profesionální (jako broadcast).
+_CZ_NOBREAK = {
+    "k", "s", "v", "z", "o", "u", "a", "i",          # jednopísmenné (striktní)
+    "ke", "ve", "se", "ze", "ku", "ku",              # vokalizované
+    "do", "na", "za", "po", "od", "ob", "pro", "při", # krátké předložky
+    "nad", "pod", "bez", "přes", "ke", "že", "aby",
+}
+
+
+def _norm_w(w: str) -> str:
+    return (w or "").strip(".,!?…:;\"'()[]„“”‚‘»«").lower()
+
+
+def _carry_dangling(parts: list) -> list:
+    """Krátkou předložku/spojku na konci kusu přesune na začátek dalšího kusu
+    (žádné „…agenta pro" na konci titulku)."""
+    for i in range(len(parts) - 1):
+        ws = parts[i].split()
+        if len(ws) >= 2 and _norm_w(ws[-1]) in _CZ_NOBREAK:
+            parts[i] = " ".join(ws[:-1])
+            parts[i + 1] = ws[-1] + " " + parts[i + 1]
+    return parts
+
+
 def _wrap_two_lines(text: str, max_line: int = 42) -> str:
-    """Zalomí titulek na max 2 řádky (zlom co nejblíž půlce, na hranici slov)."""
+    """Zalomí titulek na max 2 řádky (zlom co nejblíž půlce, na hranici slov).
+    Nezalomí hned za jednopísmennou/krátkou předložkou (ta nesmí viset na konci
+    řádku – České typografické pravidlo)."""
     if len(text) <= max_line:
         return text
     words = text.split()
     if len(words) < 2:
         return text
-    target, acc, best_i, best_d = len(text) / 2, 0, 0, 1e9
+    target = len(text) / 2
+    acc, best_i, best_d = 0, -1, 1e9          # nejlepší POVOLENÝ zlom
+    fb_i, fb_d = 0, 1e9                        # záloha (kdyby vše bylo zakázané)
     for i in range(len(words) - 1):
         acc += len(words[i]) + 1
-        if abs(acc - target) < best_d:
-            best_d, best_i = abs(acc - target), i
+        d = abs(acc - target)
+        if d < fb_d:
+            fb_d, fb_i = d, i
+        if _norm_w(words[i]) in _CZ_NOBREAK:  # za předložkou nelámat
+            continue
+        if d < best_d:
+            best_d, best_i = d, i
+    if best_i < 0:
+        best_i = fb_i
     return " ".join(words[:best_i + 1]) + "\n" + " ".join(words[best_i + 1:])
 
 
@@ -146,6 +183,7 @@ def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
                 cur = ""
         if cur:
             parts.append(cur)
+        parts = _carry_dangling(parts)         # předložka nesmí viset na konci cue
         total = sum(len(p) for p in parts) or 1
         local, t = [], start
         for i, p in enumerate(parts):
@@ -161,6 +199,82 @@ def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
         for st_, en_, tx in local:
             cues.append({"start": st_, "end": en_, "text": _wrap_two_lines(tx, wrap_chars)})
     return cues
+
+
+def _burn_into(src_video, out_segs, dst_video, work, preset,
+               u_chars, u_lines, u_size, log=None, progress_cb=None):
+    """Zapéct titulky (z out_segs) do src_video → dst_video. Jediné místo s burn
+    logikou (volá ho run_dub i dodatečné zapečení burn_existing_video)."""
+    vw, vh = ffmpeg_tools.get_video_size(src_video, log)
+    bopts = _burn_preset_opts(preset, vw, vh)
+    if u_lines in (1, 2):
+        bopts["maxlines"] = u_lines
+    _SZ = {"small": 0.035, "medium": 0.046, "large": 0.062, "xl": 0.08}
+    if u_size in _SZ and vh:
+        bopts["size"] = max(12, round(vh * _SZ[u_size]))
+    if vw and vw > 0:
+        fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
+        bopts["chars"] = min(u_chars, fit) if u_chars > 0 else min(bopts.get("chars", 42), fit)
+    elif u_chars > 0:
+        bopts["chars"] = u_chars
+    if bopts.get("maxlines", 2) == 1:
+        cue_max = max(8, bopts["chars"]); wrapc = 9999
+    else:
+        cue_max = max(14, bopts["chars"] * 2 - 4); wrapc = bopts["chars"]
+    short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0, wrap_chars=wrapc)
+    burn_srt = Path(work) / "burn.srt"
+    exporters.write_srt({"segments": short or out_segs}, burn_srt)
+    mode = bopts.get("mode", "normal")
+    if mode in ("karaoke", "word"):
+        bopts["segments"] = [
+            {"start": c["start"], "end": c["end"],
+             "text": (c.get("text") or "").replace("\n", " ")}
+            for c in (short or out_segs)]
+    if log:
+        log(f"Zapékání titulků: preset={preset} (mode={mode}, video {vw}×{vh}, "
+            f"font {bopts['size']}, {bopts['chars']} zn./řádek)")
+    ffmpeg_tools.burn_subtitles(src_video, str(burn_srt), dst_video,
+                                opts=bopts, log=log, progress_cb=progress_cb)
+
+
+def _parse_srt(path) -> list:
+    """SRT → [{start,end,text}] (sekundy). Pro dodatečné zapečení titulků."""
+    import re as _re
+    txt = Path(path).read_text(encoding="utf-8", errors="replace")
+
+    def _ts(s):
+        s = s.strip().replace(",", ".")
+        h, m, rest = s.split(":")
+        return int(h) * 3600 + int(m) * 60 + float(rest)
+
+    segs = []
+    for b in _re.split(r"\r?\n\s*\r?\n", txt.strip()):
+        lines = b.splitlines()
+        if len(lines) >= 3 and "-->" in lines[1]:
+            a, _, c = lines[1].partition("-->")
+            try:
+                segs.append({"start": _ts(a), "end": _ts(c),
+                             "text": " ".join(l.strip() for l in lines[2:] if l.strip())})
+            except Exception:
+                continue
+    return segs
+
+
+def burn_existing_video(video_path, srt_path, out_path, preset="classic",
+                        subs_chars=0, subs_maxlines=0, subs_size="", log=None):
+    """Dodatečné zapečení titulků do JIŽ hotového (např. dabovaného) videa –
+    bez nového nahrávání/dabingu. Segmenty se vezmou z existujícího SRT."""
+    out_segs = _parse_srt(srt_path)
+    if not out_segs:
+        raise RuntimeError("V titulkovém SRT nejsou žádné titulky.")
+    work = Path(out_path).parent
+    tmp = work / ("_reburn_" + Path(out_path).name)
+    _burn_into(Path(video_path), out_segs, tmp, work, preset,
+               int(subs_chars or 0), int(subs_maxlines or 0), str(subs_size or ""), log=log)
+    if not tmp.is_file() or tmp.stat().st_size == 0:
+        raise RuntimeError("Zapékání selhalo (prázdný výstup).")
+    Path(tmp).replace(out_path)
+    return out_path
 
 
 def _prepare(jobs, job_id, work, upload, target, log, prog):
@@ -239,8 +353,10 @@ def _prepare(jobs, job_id, work, upload, target, log, prog):
                                            translator=getattr(job, "translator", "local"))
         else:
             tr = txt
-        if tr and job.llm_correct:
-            tr = asr_engine.correct_text(tr, target)
+        # POZN.: NEpouštět tu asr_engine.correct_text() na překlad! Je to korektor
+        # ASR přepisu (fonetické cizí názvy porše→Porsche) a na hotovém ČESKÉM
+        # překladu misfiruje – anglicizuje termíny („orchestrační“→„orchestration“,
+        # „GTC“→„GTc“). Přepis se opravuje už ve _postprocess (transcribe_file).
         out_segs.append({"start": start, "end": end, "text": tr, "src": txt})
         prog("translating", 40 + (i + 1) / n * 16)
     return out_segs, dur, is_video, src_srt
@@ -435,48 +551,13 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
             if job.burn_subs:
                 prog("burning", 96)
                 burned = work / "burned.mp4"
-                vw, vh = ffmpeg_tools.get_video_size(out_video, log)
-                preset = getattr(job, "subs_preset", "classic")
-                bopts = _burn_preset_opts(preset, vw, vh)
-                # Uživatelské volby z editoru: velikost, znaků/řádek, počet řádků.
-                u_chars = int(getattr(job, "subs_chars", 0) or 0)
-                u_lines = int(getattr(job, "subs_maxlines", 0) or 0)
-                u_size = str(getattr(job, "subs_size", "") or "")
-                if u_lines in (1, 2):
-                    bopts["maxlines"] = u_lines
-                # VELIKOST řídí uživatel (podíl výšky videa), nezávisle na znacích.
-                _SZ = {"small": 0.035, "medium": 0.046, "large": 0.062, "xl": 0.08}
-                if u_size in _SZ and vh:
-                    bopts["size"] = max(12, round(vh * _SZ[u_size]))
-                # Znaky/řádek = jen zalomení; VŽDY omezené na to, co se na šířku
-                # vejde (~0.62·velikost = bezpečná šířka znaku) → nikdy nepřeteče.
-                if vw and vw > 0:
-                    fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
-                    bopts["chars"] = min(u_chars, fit) if u_chars > 0 else min(bopts.get("chars", 42), fit)
-                elif u_chars > 0:
-                    bopts["chars"] = u_chars
-                # Generování cue podle počtu řádků
-                if bopts.get("maxlines", 2) == 1:
-                    cue_max = max(8, bopts["chars"]); wrapc = 9999      # 1 řádek, bez zalomení
-                else:
-                    cue_max = max(14, bopts["chars"] * 2 - 4); wrapc = bopts["chars"]
-                short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0,
-                                       wrap_chars=wrapc)
-                burn_srt = work / "burn.srt"
-                exporters.write_srt({"segments": short or out_segs}, burn_srt)
-                # Animované styly (slovo po slově / karaoke) potřebují segmenty
-                # s časy — slova se načasují poměrově uvnitř každého cue.
-                mode = bopts.get("mode", "normal")
-                if mode in ("karaoke", "word"):
-                    bopts["segments"] = [
-                        {"start": c["start"], "end": c["end"],
-                         "text": (c.get("text") or "").replace("\n", " ")}
-                        for c in (short or out_segs)]
-                log(f"Zapékání titulků: preset={preset} (mode={mode}, video {vw}×{vh}, "
-                    f"font {bopts['size']}, {bopts['chars']} zn./řádek)")
-                ffmpeg_tools.burn_subtitles(
-                    out_video, str(burn_srt), burned, opts=bopts, log=log,
-                    progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
+                _burn_into(out_video, out_segs, burned, work,
+                           getattr(job, "subs_preset", "classic"),
+                           int(getattr(job, "subs_chars", 0) or 0),
+                           int(getattr(job, "subs_maxlines", 0) or 0),
+                           str(getattr(job, "subs_size", "") or ""),
+                           log=log,
+                           progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)
                 if not out_video.is_file() or out_video.stat().st_size == 0:

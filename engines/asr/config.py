@@ -106,6 +106,14 @@ SUBTITLE_MAX_GAP = 1.0        # mezera mezi slovy, po které se titulek zalomí 
 # (case-insensitive, celá slova). Řádky začínající # jsou komentáře.
 CORRECTIONS_FILE = BASE_DIR / "corrections.txt"
 
+# Glosář odborných termínů a vlastních jmen pro PŘEKLAD. Obecné překladače
+# komolí termíny z oboru (např. „harness“ → „postroj“, „GTC“ → „obchodní
+# podmínky“). Tento glosář se vkládá do promptu LLM překladu – pro termíny,
+# které se v textu vyskytnou, model dostane závazný překlad. Formát řádku:
+#   anglický termín = český překlad      (case-insensitive, celá slova)
+# Řádky s # jsou komentáře. Změny se projeví bez restartu (čte se dle mtime).
+TRANSLATION_GLOSSARY_FILE = BASE_DIR / "translation_glossary.txt"
+
 # --- Automatická oprava cizích slov/značek lokálním LLM (Ollama) ----------
 # Po přepisu pošle text do lokálního LLM (Ollama) s přísnou instrukcí "oprav
 # jen foneticky špatně napsaná cizí slova/značky/jména na správný pravopis,
@@ -114,7 +122,11 @@ CORRECTIONS_FILE = BASE_DIR / "corrections.txt"
 # Když Ollama neběží nebo selže, vrátí se původní text (job nikdy nespadne).
 LLM_CORRECT = os.environ.get("PZ_LLM_CORRECT", "1") == "1"
 OLLAMA_URL = os.environ.get("PZ_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
-OLLAMA_MODEL = os.environ.get("PZ_OLLAMA_MODEL", "gemma4:latest")
+# Výchozí offline model pro překlad i LLM korekci. gemma3:12b překládá výrazně
+# spolehlivěji než malý gemma4:latest (ten dělal hrubky, např. „Welcome“ →
+# „Milujeme“). Přepsat lze přes PZ_OLLAMA_MODEL. Pro nejvyšší kvalitu je v UI
+# volba „gemma4:31b“ (translator=gemma31b).
+OLLAMA_MODEL = os.environ.get("PZ_OLLAMA_MODEL", "gemma3:12b")
 LLM_TIMEOUT = _env_int("PZ_LLM_TIMEOUT", 300)  # vyšší kvůli studenému startu velkého modelu
 
 # --- Detekce anglických slov dvojprůchodem (EXPERIMENT, default vyp) -------

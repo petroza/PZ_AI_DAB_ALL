@@ -35,6 +35,13 @@ Po editaci souboru:
 
 ## Běžící služby na PC
 - **Worker:** `START_DABWORKER.bat` (nebo `cd /o/ALLDUB && .venv\Scripts\python -u dab_worker.py`).
+  - Bat volá venv python PŘÍMO (`".venv\Scripts\python.exe" -u dab_worker.py`), ne jen
+    `python` — jinak při neaktivovaném venv spadne na systémový Python bez závislostí.
+  - Spouštěj **dvojklikem z plochy**. Spuštění batu přes automatizaci/`cmd /k` z
+    neinteraktivního kontextu python nenastartuje (záležitost session) → tam radši
+    přímo `.venv\Scripts\python.exe -u dab_worker.py`.
+  - Worker spouští 1 mp-child (system python, ~35 MB, nepolluje). Čistý stav =
+    1 venv-poller + 1 mp-child. Nespouštěj víc pollerů (dvojnásobné Forpsi pollování).
 - **XTTS server** (jen pro engine `xtts`): `START_XTTS.bat` (:7868, GPU).
 - `START_ALL.bat` spustí obojí. Ollama (`gemma4:latest`) musí běžet pro překlad.
 
@@ -54,15 +61,61 @@ Vše se ukládá i bez dabování (zavření = uloží). Náhled = výstup (krá
 ruční zalomení na N řádků).
 
 ## Překladače (volba ve formuláři i v editoru)
-`translator`: `local` (gemma4:latest, offline) | `gemma31b` (offline kvalitnější)
-| `google` (online, zdarma, bez klíče) | ~~deepl~~ (z UI odebráno, backend dormantní).
+`translator`: `local` (**gemma3:12b**, offline výchozí) | `gemma31b` (gemma4:31b, offline nejkvalitnější)
+| `google` (online, zdarma, bez klíče, nejpřesnější) | ~~deepl~~ (z UI odebráno, backend dormantní).
+Pozn. (2026-06-26): výchozí offline model přepnut z gemma4:latest → **gemma3:12b**
+(`engines/asr/config.py OLLAMA_MODEL`), protože malý gemma4:latest dělal hrubky
+(„Welcome" → „Milujeme"). gemma3:12b i 31b překládají správně. Přepsat lze env `PZ_OLLAMA_MODEL`.
 Re-překlad v editoru: **Google = hned z relay (PHP)**, gemma = přes worker (phase
 `retranslate`, bez ASR/videa, bere uložené `src`).
 
+## Glosář odborných termínů (translation_glossary.txt)
+Obecné překladače komolí žargon („harness"→„postroj", „GTC"→„VOP"). Soubor
+`translation_glossary.txt` v kořeni (`en = cs`, celá slova, reload dle mtime):
+- **gemma (LLM):** termíny z textu se vloží do promptu jako závazný překlad
+  (`_glossary_hint`) → gemma je i správně skloňuje.
+- **Google:** placeholdery `⟦N⟧` chrání JEN invariantní názvy (en==cs: NVIDIA,
+  GTC, CUDA X…); skloňované termíny ne (placeholder by rozbil pád/slovosled).
+Rozšiřuj přidáním řádků (např. `kubernetes = Kubernetes`).
+
+## České titulky — předložka nevisí na konci řádku
+`_CZ_NOBREAK`+`_carry_dangling` na 3 místech (VŠECHNA nutná): `ffmpeg_tools.py
+_wrap_line` (autoritativní pro ZAPÉKÁNÍ — `_build_ass` zalamuje znovu vlastní
+funkcí!), `pipeline.py`, `web/app.js`. Krátké předložky/spojky se přesunou ke
+slovu za nimi.
+
+## Dodatečné zapečení titulků (re-burn) — bez nového nahrávání
+Hotová zakázka (done, má video+srt_tgt) → v UI tlačítko „📝 Zapéct titulky do
+videa" + výběr stylu. Tok: `api.php?action=reburn` (flag `reburn`+status
+processing) → `worker_api.php` claim větev → phase **burn** → worker stáhne
+hotové video+SRT (`worker_output` endpoint, kind=video|srt_tgt) → `pipeline.
+burn_existing_video()` zapeče → nahraje zpět. Burn logika je v `pipeline._burn_into()`
+(sdílí run_dub i re-burn). `worker_result` SLUČUJE outputs (jinak by re-burn smazal SRT).
+
+## Předabovat s jiným nastavením (re-dub)
+Hotová zakázka → „🔄 Předabovat" (jen když `has_source`) → modal (engine/hlas/
+jazyk/překladač/audio/titulky) → `api.php?action=redub` aktualizuje parametry a
+znovu zařadí jako **pending full** běh ze zachovaného zdroje. **Proto `worker_result`
+už NEMAŽE zdrojové video** (drží se do smazání zakázky). Worker beze změny.
+Pozor: zakázky z doby PŘED touto změnou mají zdroj smazaný → re-dub u nich nejde.
+
 ## Stav (k poslednímu commitu)
-- `web/app.js?v=15`, `web/style.css?v=8`.
+- `web/app.js?v=19`, `web/style.css?v=10`.
 - Téma: tmavě **modré, hranaté** (proměnné v `style.css :root` / `[data-theme=light]`).
 - Vše ověřeno naživo (review→edit→dabing, presety, karaoke titulky, re-překlad).
+- **2026-06-26 odladění:** (a) BUG FIX `_llm_correct_chunk` (nedefinovaná `model`
+  → LLM korekce přepisu/překladu byla mrtvá, teď funguje „porše"→"Porsche").
+  (b) Výchozí offline překladač gemma4:latest → **gemma3:12b** (přesnější).
+  (c) Výběr hlasu: datalist → čistý `<select>` měnící se dle enginu (`fillVoices()`).
+  (d) **KRITICKÝ FIX:** odstraněn `correct_text()` na PŘEKLADU v `_prepare`
+  (anglicizoval české termíny: „orchestrační"→„orchestration", „GTC"→„GTc").
+  (e) Teplota překladu 0.1→0.0 (deterministické). (f) Fonetika AI názvů
+  (NVIDIA/CUDA/GTC…) v `tts_phonetics.txt`. (g) XTTS: doplnění tečky na konec
+  textu (míň koncové halucinace). POZN.: dabing-hlas (XTTS) má praktické limity;
+  whisper QA syntetické řeči je nespolehlivé → kvalitu hlasu posuď uchem. Titulky
+  = deterministicky dokonalé.
+  Ověřeno přímými Python testy + E2E (news_en EN→CZ). POZN.: worker spouští 1
+  benigní mp-child (system python, ~35 MB, nepolluje) — NEzabíjet, není to duplicitní worker.
 
 ## Hlavní soubory
 - `app/pipeline.py` — orchestrace: `_prepare` (ASR+překlad), `run_dub(segments=)`

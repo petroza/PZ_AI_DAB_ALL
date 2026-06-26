@@ -16,7 +16,10 @@ echo   Pro kvalitni cesky hlas (XTTS) spust take START_XTTS.bat
 echo   (zastavis ho zde klavesami Ctrl+C)
 echo ======================================================
 
-python dab_worker.py
+REM Volame venv python PRIMO (ne jen "python") - kdyby aktivace venv nechytla
+REM (napr. pri spusteni z automatizace), nespadne to na systemovy Python bez
+REM zavislosti. Funguje spolehlive pri dvojkliku i z jineho kontextu.
+".venv\Scripts\python.exe" -u dab_worker.py
 
 echo.
 echo Worker ukoncen.

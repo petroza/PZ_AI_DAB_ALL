@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header class="top">
@@ -36,9 +36,9 @@
       <label>Cílový jazyk <select id="target_lang"></select></label>
       <label>Překladač
         <select id="translator">
-          <option value="local">Lokální gemma4 (offline, výchozí)</option>
-          <option value="gemma31b">gemma4:31b (offline, kvalitnější)</option>
-          <option value="google">Google Translate (online, zdarma)</option>
+          <option value="local">gemma3:12b + glosář (offline)</option>
+          <option value="gemma31b">gemma4:31b (nejkvalitnější)</option>
+          <option value="google">Google (online)</option>
         </select>
       </label>
     </div>
@@ -46,17 +46,12 @@
       <label>Hlasový engine
         <select id="tts_engine">
           <option value="piper">Piper — offline (výchozí)</option>
-          <option value="xtts">XTTS — kvalitní, klonuje hlas (GPU)</option>
-          <option value="voicestudio">PZ Voice Studio — Chatterbox</option>
+          <option value="xtts">XTTS — klonuje hlas (GPU)</option>
+          <option value="voicestudio">PZ Voice Studio</option>
         </select>
       </label>
       <label><span class="cap">Hlas <span id="voice-hint" class="hint">(volitelné)</span></span>
-        <input id="voice" type="text" list="voices-list" placeholder="prázdné = klon / např. Daisy Studious">
-        <datalist id="voices-list">
-          <option value="Daisy Studious"><option value="Alison Dietlinde"><option value="Gracie Wise">
-          <option value="Alexandra Hisakawa"><option value="Damien Black"><option value="Aaron Dreschner">
-          <option value="Baldur Sanjin"><option value="Viktor Eka"><option value="cs_CZ-jirka-medium">
-        </datalist>
+        <select id="voice"></select>
       </label>
     </div>
     <div class="row">
@@ -142,7 +137,7 @@
     <div class="ed-controls ed-trans-row">
       <label>Překladač
         <select id="ed-trans">
-          <option value="local">Lokální gemma4</option>
+          <option value="local">Lokální gemma3:12b</option>
           <option value="gemma31b">gemma4:31b</option>
           <option value="google">Google (online)</option>
         </select>
@@ -158,6 +153,60 @@
   </div>
 </div>
 
-<script src="app.js?v=15"></script>
+<div id="redubmodal" class="modal hidden">
+  <div class="modal-box" style="width:min(520px,100%)">
+    <div class="modal-head">
+      <b>🔄 Předabovat s jiným nastavením</b>
+      <button id="rd-close" class="theme-btn" title="Zavřít">✕</button>
+    </div>
+    <div class="aebody">
+      <p class="modal-sub" style="padding:0 0 10px">Stejné video, nový dabing — změň hlas, engine nebo režim a spusť znovu (bez nahrávání).</p>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
+        <label>Hlasový engine
+          <select id="rd-engine">
+            <option value="piper">Piper — offline</option>
+            <option value="xtts">XTTS — klonuje hlas (GPU)</option>
+            <option value="voicestudio">PZ Voice Studio</option>
+          </select>
+        </label>
+        <label><span class="cap">Hlas <span id="rd-voice-hint" class="hint"></span></span>
+          <select id="rd-voice"></select>
+        </label>
+        <label>Cílový jazyk <select id="rd-target"></select></label>
+        <label>Překladač
+          <select id="rd-translator">
+            <option value="local">gemma3:12b + glosář</option>
+            <option value="gemma31b">gemma4:31b</option>
+            <option value="google">Google (online)</option>
+          </select>
+        </label>
+      </div>
+      <fieldset class="seg" style="margin-top:12px">
+        <legend>Zvuk originálu</legend>
+        <label class="rad"><input type="radio" name="rd_audio" value="replace" checked> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="rd_audio" value="voiceover"> Voice-over přes ztlumený originál</label>
+      </fieldset>
+      <label class="chk" style="margin-top:10px"><input id="rd-burn" type="checkbox"> Zapéct titulky do videa</label>
+      <label id="rd-preset-wrap" class="chk hidden">Styl titulků
+        <select id="rd-preset">
+          <option value="classic">16:9 klasické (dole)</option>
+          <option value="reels">9:16 Reels — velké tučné</option>
+          <option value="reels_box">9:16 + podklad (box)</option>
+          <option value="word">⚡ Slovo po slově</option>
+          <option value="karaoke">🎤 Karaoke žlutě</option>
+          <option value="karaoke_green">🎤 Karaoke zeleně</option>
+          <option value="karaoke_box">🎤 Karaoke v boxu</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <span id="rd-status" class="ed-status"></span>
+      <button id="rd-cancel" class="lnk">Zavřít</button>
+      <button id="rd-run" class="go">🔄 Spustit znovu</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=19"></script>
 </body>
 </html>

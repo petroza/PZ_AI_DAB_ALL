@@ -188,8 +188,33 @@ def get_video_size(path: Union[str, Path], log: LogFn = None) -> tuple:
     return (1920, 1080)
 
 
+# České typografické pravidlo: jednopísmenné/krátké předložky a spojky nesmí
+# zůstat na konci řádku – patří ke slovu za nimi (profesionální broadcast titulky).
+_CZ_NOBREAK = {
+    "k", "s", "v", "z", "o", "u", "a", "i",
+    "ke", "ve", "se", "ze", "ku",
+    "do", "na", "za", "po", "od", "ob", "pro", "při",
+    "nad", "pod", "bez", "přes", "že", "aby",
+}
+
+
+def _norm_w(w: str) -> str:
+    return (w or "").strip(".,!?…:;\"'()[]„“”‚‘»«").lower()
+
+
+def _carry_dangling_lines(lines: list) -> list:
+    """Krátkou předložku/spojku na konci řádku přesune na začátek dalšího řádku."""
+    for i in range(len(lines) - 1):
+        ws = lines[i].split()
+        if len(ws) >= 2 and _norm_w(ws[-1]) in _CZ_NOBREAK:
+            lines[i] = " ".join(ws[:-1])
+            lines[i + 1] = ws[-1] + " " + lines[i + 1]
+    return lines
+
+
 def _wrap_line(text: str, chars: int, max_lines: int = 2) -> str:
-    """Zalomí text na řádky do `chars` znaků (po slovech), max `max_lines` řádků."""
+    """Zalomí text na řádky do `chars` znaků (po slovech), max `max_lines` řádků.
+    Krátkou předložku/spojku nenechá viset na konci řádku (české pravidlo)."""
     words = (text or "").split()
     lines, cur = [], ""
     for w in words:
@@ -206,6 +231,7 @@ def _wrap_line(text: str, chars: int, max_lines: int = 2) -> str:
         head = lines[:max_lines - 1]
         head.append(" ".join(lines[max_lines - 1:]))
         lines = head
+    lines = _carry_dangling_lines(lines)
     return "\n".join(lines)
 
 

@@ -108,6 +108,10 @@ class XttsBackend(TTSBackend):
         if spoken != text and log:
             log(f"  fonetika: „{text[:30]}…“ → „{spoken[:30]}…“")
         text = spoken
+        # XTTS halucinuje na konci klipu („domýšlí" slabiky), když text nekončí
+        # interpunkcí. Doplň tečku → model ví, že věta skončila → čistší konec.
+        if text and text[-1] not in ".!?…,;:":
+            text = text + "."
         payload = {"text": text, "out_path": str(out_wav),
                    "language": lang or "cs-CZ", "speed": speed}
         # 'voice' = buď cesta k referenčnímu WAV (klonování), nebo jméno

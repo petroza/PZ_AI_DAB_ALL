@@ -406,6 +406,70 @@ def _seems_untranslated(out: str, src: str, target: str) -> bool:
     return False
 
 
+# --- glosář odborných termínů pro překlad --------------------------------
+# Obecné překladače komolí termíny z oboru („harness“→„postroj“, „GTC“→„obchodní
+# podmínky“). Glosář se vkládá do promptu LLM: pro termíny, které se v textu
+# objeví, dostane model závazný překlad. Soubor translation_glossary.txt v
+# kořeni, čte se dle mtime (změny bez restartu). Formát: anglicky = česky.
+_GLOSS_CACHE: "list | None" = None
+_GLOSS_MTIME: float = -1.0
+_GLOSS_LOCK = threading.Lock()
+
+
+def _load_glossary() -> list:
+    """Vrátí [(re_pattern, en_term, cs_term)] z translation_glossary.txt."""
+    global _GLOSS_CACHE, _GLOSS_MTIME
+    try:
+        path = config.TRANSLATION_GLOSSARY_FILE
+        mtime = path.stat().st_mtime if path.is_file() else 0.0
+    except Exception:
+        mtime = 0.0
+    if _GLOSS_CACHE is not None and mtime == _GLOSS_MTIME:
+        return _GLOSS_CACHE
+    with _GLOSS_LOCK:
+        if _GLOSS_CACHE is not None and mtime == _GLOSS_MTIME:
+            return _GLOSS_CACHE
+        rules = []
+        try:
+            path = config.TRANSLATION_GLOSSARY_FILE
+            if path.is_file():
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    en, cs = line.split("=", 1)
+                    en, cs = en.strip(), cs.strip()
+                    if en and cs:
+                        rx = re.compile(r"(?<!\w)" + re.escape(en) + r"(?!\w)",
+                                        re.IGNORECASE | re.UNICODE)
+                        rules.append((rx, en, cs))
+        except Exception:
+            rules = []
+        _GLOSS_CACHE = rules
+        _GLOSS_MTIME = mtime
+        return rules
+
+
+def _glossary_hint(text: str) -> str:
+    """Pokyn do promptu se závazným překladem termínů, které jsou v textu.
+    Delší termíny první (ať „large language models“ vyhraje nad „models“)."""
+    gloss = _load_glossary()
+    if not gloss:
+        return ""
+    hits, seen = [], set()
+    for rx, en, cs in sorted(gloss, key=lambda r: -len(r[1])):
+        if en.lower() in seen:
+            continue
+        if rx.search(text):
+            hits.append((en, cs))
+            seen.add(en.lower())
+    if not hits:
+        return ""
+    pairs = "; ".join(f"„{en}“ → „{cs}“" for en, cs in hits)
+    return (f" ZÁVAZNÝ překlad odborných termínů a názvů (dodrž PŘESNĚ, "
+            f"nepřekládej je jinak): {pairs}.")
+
+
 def llm_translate(text: str, target: str, log: LogFn = None,
                   source: str = "auto", max_chars: int = 0,
                   model: Optional[str] = None) -> str:
@@ -427,15 +491,16 @@ def llm_translate(text: str, target: str, log: LogFn = None,
         fit = (f" DŮLEŽITÉ: překlad se musí dát přirozeně vyslovit za stejnou dobu "
                f"jako originál, proto buď stručný a vejdi se do {max_chars} znaků – "
                f"klidně zkrať a zjednoduš formulaci, ale zachovej hlavní sdělení.")
+    gloss = _glossary_hint(text)        # závazný překlad odborných termínů
     base_prompt = (f"Přelož VĚRNĚ a přesně následující titulek do {tname} – nic "
-                   f"nepřidávej ani neměň význam.{fit} Text je pro DABING (čte ho "
+                   f"nepřidávej ani neměň význam.{fit}{gloss} Text je pro DABING (čte ho "
                    f"hlas), proto nepoužívej zkratky ani symboly – vše vypiš slovy "
                    f"(např. místo „vs.“ napiš „oproti“). Zachovej "
                    f"smysl{'' if fit else ' i styl'}, vrať POUZE překlad – žádný "
                    f"komentář, žádné uvozovky.\n\n{text}")
     # Razantní prompt, když model „echuje“ originál (vrací ho nepřeložený).
     force_prompt = (f"Následující text je v cizím jazyce. Přelož ho CELÝ do "
-                    f"{tname}. ANI JEDNO slovo nenech v původním jazyce. "
+                    f"{tname}. ANI JEDNO slovo nenech v původním jazyce.{gloss} "
                     f"Vrať POUZE překlad, nic jiného:\n\n{text}")
     # Až 4 pokusy s eskalací – Ollama může přechodně selhat (timeout, VRAM), NEBO
     # gemma4 vrátí originál beze změny (echo → půl videa pak zůstalo anglicky).
@@ -451,7 +516,7 @@ def llm_translate(text: str, target: str, log: LogFn = None,
                 json={"model": (model or config.OLLAMA_MODEL),
                       "prompt": force_prompt if forceful else base_prompt,
                       "stream": False, "keep_alive": "30m",
-                      "options": {"temperature": 0.5 if forceful else 0.1,
+                      "options": {"temperature": 0.5 if forceful else 0.0,
                                   "num_predict": 512}},
                 timeout=config.LLM_TIMEOUT,
             )
@@ -478,16 +543,45 @@ def _lang2(code: str) -> str:
     return (code or "auto").split("-")[0].lower()
 
 
+def _protect_terms(text: str) -> "tuple[str, list]":
+    """Pro Google: INVARIANTNÍ vlastní jména/zkratky z glosáře (kde en == cs,
+    např. GTC, NVIDIA, CUDA X) nahradí placeholdery ⟦N⟧, ať je Google nepřekládá
+    chybně (GTC→„VOP“). Skloňované/víceslovné PŘEKLADY (harness→orchestrační
+    vrstva) se NECHRÁNÍ – placeholder by rozbil český pád/slovosled; ty řeší
+    glosář v promptu LLM (gemma). Vrátí (chráněný_text, [(placeholder, název)])."""
+    gloss = _load_glossary()
+    if not gloss:
+        return text, []
+    out, restore, idx = text, [], 0
+    for rx, en, cs in sorted(gloss, key=lambda r: -len(r[1])):
+        if en.strip().lower() != cs.strip().lower():   # jen invariantní názvy
+            continue
+        if rx.search(out):
+            ph = f"⟦{idx}⟧"           # ⟦idx⟧ – přežije Google neporušené
+            out = rx.sub(ph, out)
+            restore.append((ph, cs))
+            idx += 1
+    return out, restore
+
+
+def _restore_terms(text: str, restore: list) -> str:
+    for ph, cs in restore:
+        text = text.replace(ph, cs)
+    return text
+
+
 def _google_translate(text: str, source: str, target: str, log: LogFn = None) -> Optional[str]:
     """Google Translate přes veřejný (neoficiální) endpoint – zdarma, bez klíče.
-    Vrátí překlad nebo None při chybě (pak se použije fallback)."""
+    Vrátí překlad nebo None při chybě (pak se použije fallback).
+    Termíny z glosáře jsou chráněny placeholdery (Google by je přeložil špatně)."""
     import requests
     sl, tl = _lang2(source) or "auto", _lang2(target)
+    q, restore = _protect_terms(text)          # ochrana odborných termínů/názvů
     for attempt in range(3):
         try:
             r = requests.get(
                 "https://translate.googleapis.com/translate_a/single",
-                params={"client": "gtx", "sl": sl, "tl": tl, "dt": "t", "q": text},
+                params={"client": "gtx", "sl": sl, "tl": tl, "dt": "t", "q": q},
                 timeout=15,
                 headers={"User-Agent": "Mozilla/5.0"},
             )
@@ -495,7 +589,7 @@ def _google_translate(text: str, source: str, target: str, log: LogFn = None) ->
             data = r.json()
             out = "".join(seg[0] for seg in (data[0] or []) if seg and seg[0]).strip()
             if out:
-                return out
+                return _restore_terms(out, restore)
         except Exception as e:
             if attempt == 2:
                 _log(log, f"Google překlad selhal ({e}).")
@@ -563,7 +657,7 @@ def _llm_correct_chunk(text: str, lang: Optional[str] = None) -> str:
     try:
         r = requests.post(
             config.OLLAMA_URL,
-            json={"model": (model or config.OLLAMA_MODEL), "prompt": prompt, "stream": False,
+            json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False,
                   "keep_alive": "10m",  # nech model nahřátý mezi segmenty/joby
                   "options": {"temperature": 0, "num_predict": 1024}},
             timeout=config.LLM_TIMEOUT,
