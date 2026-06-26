@@ -410,9 +410,10 @@ def llm_translate(text: str, target: str, log: LogFn = None,
                f"klidně zkrať a zjednoduš formulaci, ale zachovej hlavní sdělení.")
     try:
         import requests
-        prompt = (f"Přelož následující titulek do {tname}.{fit} Text je pro "
-                  f"DABING (čte ho hlas), proto nepoužívej zkratky ani symboly – "
-                  f"vše vypiš slovy (např. místo „vs.“ napiš „oproti“). Zachovej "
+        prompt = (f"Přelož VĚRNĚ a přesně následující titulek do {tname} – nic "
+                  f"nepřidávej ani neměň význam.{fit} Text je pro DABING (čte ho "
+                  f"hlas), proto nepoužívej zkratky ani symboly – vše vypiš slovy "
+                  f"(např. místo „vs.“ napiš „oproti“). Zachovej "
                   f"smysl{'' if fit else ' i styl'}, vrať POUZE překlad – žádný "
                   f"komentář, žádné uvozovky.\n\n{text}")
         r = requests.post(
