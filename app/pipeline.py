@@ -174,6 +174,13 @@ def run_dub(jobs, job_id: str) -> None:
         chunks = _merge_segments(segs)
         if len(chunks) != len(segs):
             log(f"Sloučeno {len(segs)} segmentů → {len(chunks)} bloků pro plynulejší dabing")
+        # Zdroj i cíl ve stejném jazyce (např. cs→cs) → NEpřekládat. „Překlad"
+        # by jen parafrázoval přepis a zanášel chyby (např. „má v sobě“ →
+        # „má ve svém náboji“). Použije se přesný přepis.
+        same_lang = (effective_src != "auto"
+                     and effective_src.split("-")[0] == target.split("-")[0])
+        if same_lang:
+            log(f"Zdroj i cíl = {target.split('-')[0]} → přeskakuji překlad (jen přepis)")
         n = len(chunks) or 1
         out_segs = []
         for i, s in enumerate(chunks):
@@ -187,8 +194,11 @@ def run_dub(jobs, job_id: str) -> None:
             # (~14 zn./s je přirozené české tempo s mírným zrychlením). Drží
             # překlad dost krátký, aby se řeč nemusela drtit časem.
             budget = int((end - start) * 14) if (end - start) > 0 else 0
-            tr = asr_engine.llm_translate(txt, target, log, source=effective_src,
-                                          max_chars=budget) if txt else txt
+            if txt and not same_lang:
+                tr = asr_engine.llm_translate(txt, target, log,
+                                              source=effective_src, max_chars=budget)
+            else:
+                tr = txt
             if tr and job.llm_correct:
                 tr = asr_engine.correct_text(tr, target)
             out_segs.append({"start": start, "end": end, "text": tr})
