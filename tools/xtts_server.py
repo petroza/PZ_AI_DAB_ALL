@@ -33,6 +33,7 @@ LANG_MAP = {
 
 _tts = None
 _lock = threading.Lock()       # XTTS není thread-safe — syntéza serializovaná
+_init_lock = threading.Lock()  # ochrana dvojité inicializace modelu (double-checked locking)
 
 
 def to_xtts_lang(loc: "str | None") -> "str | None":
@@ -68,13 +69,16 @@ def expand_numbers(text: str, lang: str) -> str:
 
 def get_tts():
     global _tts
-    if _tts is None:
-        import torch
-        from TTS.api import TTS
-        dev = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[xtts] načítám {MODEL} na {dev} …", flush=True)
-        _tts = TTS(MODEL).to(dev)
-        print("[xtts] připraveno", flush=True)
+    if _tts is not None:
+        return _tts
+    with _init_lock:
+        if _tts is None:
+            import torch
+            from TTS.api import TTS
+            dev = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"[xtts] načítám {MODEL} na {dev} …", flush=True)
+            _tts = TTS(MODEL).to(dev)
+            print("[xtts] připraveno", flush=True)
     return _tts
 
 

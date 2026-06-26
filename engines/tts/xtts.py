@@ -30,11 +30,18 @@ _PHON_BUILTIN = {
     "enyaqu": "Enjaku", "enyaqem": "Enjakem",
 }
 _phon_cache: "dict | None" = None
+_phon_mtime: float = -1.0   # mtime souboru při posledním načtení (-1 = nenačteno)
 
 
 def _phonetics_map() -> dict:
-    global _phon_cache
-    if _phon_cache is not None:
+    global _phon_cache, _phon_mtime
+    try:
+        from app import config
+        f = config.BASE_DIR / "tts_phonetics.txt"
+        mtime = f.stat().st_mtime if f.is_file() else 0.0
+    except Exception:
+        mtime = 0.0
+    if _phon_cache is not None and mtime == _phon_mtime:
         return _phon_cache
     m = dict(_PHON_BUILTIN)
     try:
@@ -51,6 +58,7 @@ def _phonetics_map() -> dict:
     except Exception:
         pass
     _phon_cache = m
+    _phon_mtime = mtime
     return m
 
 
