@@ -21,17 +21,10 @@ BACKEND_DIR = Path(__file__).resolve().parent
 # projektu (kde leží models/, tools/, corrections.txt) je o dvě úrovně výš.
 BASE_DIR = BACKEND_DIR.parent.parent
 
-FRONTEND_DIR = BASE_DIR / "frontend"
 MODELS_DIR = BASE_DIR / "models"
 TOOLS_DIR = BASE_DIR / "tools"
 PARAKEET_DIR = TOOLS_DIR / "parakeet"
 FFMPEG_DIR = TOOLS_DIR / "ffmpeg"
-UPLOADS_DIR = BASE_DIR / "uploads"
-OUTPUTS_DIR = BASE_DIR / "outputs"
-JOBS_DIR = BASE_DIR / "jobs"
-LOGS_DIR = BASE_DIR / "logs"
-
-APP_LOG = LOGS_DIR / "app.log"
 
 def _env_int(name: str, default: int) -> int:
     try:
@@ -47,20 +40,11 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-# --- Síť ------------------------------------------------------------------
-HOST = os.environ.get("PZ_HOST", "127.0.0.1")
-PORT = _env_int("PZ_PORT", 8787)
-
 # --- Audio pipeline -------------------------------------------------------
 # Výstup do ASR musí být VŽDY 16 kHz / mono / PCM s16le.
 TARGET_SAMPLE_RATE = 16000
 TARGET_CHANNELS = 1
 TARGET_CODEC = "pcm_s16le"
-
-SUPPORTED_INPUT_EXTENSIONS = {
-    ".wav", ".mp3", ".mp4", ".mov", ".m4a", ".mkv",
-    ".aac", ".flac", ".ogg", ".opus", ".webm", ".avi",
-}
 
 # --- Jazyky ---------------------------------------------------------------
 # UI locale -> kód jazyka pro parakeet (auto = nechat model rozhodnout).
@@ -117,8 +101,6 @@ SUBTITLE_MAX_CHARS = 64       # max délka řádku titulku (znaky)
 SUBTITLE_MAX_DURATION = 6.0   # max délka jednoho titulku [s]
 SUBTITLE_MAX_GAP = 1.0        # mezera mezi slovy, po které se titulek zalomí [s]
 
-OUTPUT_FORMATS = ["txt", "srt", "vtt", "json"]
-
 # Slovník oprav po přepisu (vlastní jména, značky, anglická slova).
 # Soubor corrections.txt v kořeni projektu. Formát řádku:  chybně = správně
 # (case-insensitive, celá slova). Řádky začínající # jsou komentáře.
@@ -150,12 +132,6 @@ CODESWITCH_MIN_LEN = _env_int("PZ_CS_MINLEN", 3)            # min. délka EN slo
 
 
 # --- Pomocné funkce -------------------------------------------------------
-def ensure_dirs() -> None:
-    for d in (MODELS_DIR, PARAKEET_DIR, FFMPEG_DIR, UPLOADS_DIR,
-              OUTPUTS_DIR, JOBS_DIR, LOGS_DIR):
-        d.mkdir(parents=True, exist_ok=True)
-
-
 def _find_in_dir(root: Path, names) -> "Path | None":
     if not root.exists():
         return None
