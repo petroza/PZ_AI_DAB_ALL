@@ -336,17 +336,20 @@ def run_dub(jobs, job_id: str) -> None:
                 vw, vh = ffmpeg_tools.get_video_size(out_video, log)
                 preset = getattr(job, "subs_preset", "classic")
                 bopts = _burn_preset_opts(preset, vw, vh)
-                # Reels/social = trendy „pár slov" cue → krátké titulky (vejdou
-                # se i s velkým fontem na úzké 9:16 video).
-                burn_srt = tgt_srt
-                if preset in ("reels", "reels_box", "social"):
-                    short = _subtitle_cues(out_segs, max_chars=28, max_dur=2.5)
-                    burn_srt = work / "reels.srt"
-                    exporters.write_srt({"segments": short}, burn_srt)
-                log(f"Zapékání titulků: preset={preset}"
-                    f" (video {vw}×{vh}, font {bopts['size']})")
+                # Přizpůsob titulek ŠÍŘCE videa, ať NEPŘETÉKÁ do stran (hlavně
+                # 9:16). Spočítej kolik znaků se vejde na řádek a podle toho
+                # zkrať cue (re-split) i zalomení — platí pro VŠECHNY presety.
+                if vw and vw > 0:
+                    fit = max(10, int(vw / (bopts["size"] * 0.58)))
+                    bopts["chars"] = min(bopts.get("chars", 42), fit)
+                cue_max = max(16, bopts["chars"] * 2 - 4)   # 2 řádky dané šířky
+                short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0)
+                burn_srt = work / "burn.srt"
+                exporters.write_srt({"segments": short or out_segs}, burn_srt)
+                log(f"Zapékání titulků: preset={preset} (video {vw}×{vh}, "
+                    f"font {bopts['size']}, {bopts['chars']} zn./řádek)")
                 ffmpeg_tools.burn_subtitles(
-                    out_video, burn_srt, burned, opts=bopts, log=log,
+                    out_video, str(burn_srt), burned, opts=bopts, log=log,
                     progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)
