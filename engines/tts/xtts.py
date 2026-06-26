@@ -132,13 +132,25 @@ class XttsBackend(TTSBackend):
             log(f"XTTS: „{text[:40]}…“ → {out_wav.name}")
         return out_wav
 
+    # Doporučené hlasy (ověřeno podle výšky F0 – srozumitelné v češtině).
+    # Zobrazí se první ve výběru. Ž = ženský, M = mužský.
+    CURATED = [
+        "Daisy Studious", "Alison Dietlinde", "Gracie Wise",      # Ž
+        "Alexandra Hisakawa",                                     # Ž
+        "Damien Black", "Aaron Dreschner", "Baldur Sanjin",       # M
+        "Viktor Eka",                                             # M
+    ]
+
     def list_voices(self) -> List[dict]:
-        """Vestavěné hlasy XTTS (+ prázdný = klonovat původní mluvčí)."""
+        """Vestavěné hlasy XTTS, doporučené první (+ prázdný = klonovat)."""
         try:
             import requests
             r = requests.get(XTTS_URL + "/voices", timeout=5)
             if r.ok:
-                return [{"id": n} for n in (r.json().get("voices") or [])]
+                names = r.json().get("voices") or []
+                top = [n for n in self.CURATED if n in names]
+                rest = [n for n in names if n not in top]
+                return [{"id": n} for n in (top + rest)]
         except Exception:
             pass
         return []

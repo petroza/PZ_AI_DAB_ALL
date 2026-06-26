@@ -133,6 +133,12 @@ function _fillVoiceList() {
       ? "prázdné = klonovat původní hlas · nebo vyber hlas"
       : "např. cs_CZ-jirka-medium";
   }
+  const vHint = $("voice-hint");
+  if (vHint) {
+    vHint.textContent = engine === "xtts"
+      ? "prázdné = klon · Ž: Daisy, Alison, Gracie · M: Damien, Aaron, Baldur"
+      : "(volitelné)";
+  }
   // U XTTS nech prázdné (= klonovat originál); u Piperu napověz hlas jazyka.
   if (engine === "xtts") return;
   // auto-suggest default voice for target language if voice field is empty
