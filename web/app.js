@@ -156,10 +156,32 @@ async function delJob(id){
 
 // ---- editor titulků na videu (video-centric, jako ElevenLabs) ----
 let edId=null, edSegs=[], edLast=null, edEditing=false, edMaxChars=0;
-let edChars=0, edLines=2, edSize="", edDirty=false;   // znaků/řádek, řádky, velikost, změny
+let edChars=0, edLines=2, edSize="", edDirty=false, edEC=16;   // znaků/řádek, řádky, velikost, změny, eff. znaků
 const ED_SIZE={small:0.035, medium:0.046, large:0.062, xl:0.08};   // podíl VÝŠKY videa
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
 function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
+// Rozseká segment na KRÁTKÉ titulky (cue) jako se zapéče do videa – stejné
+// dělení, ať náhled = výstup (ne zeď textu).
+function edSplitCues(seg, perLine, maxLines){
+  const text=(seg.text||"").trim(), start=+seg.start, end=+seg.end;
+  if(!text || end<=start) return [];
+  const maxChars=Math.max(4, perLine*maxLines);
+  const words=text.split(/\s+/).filter(Boolean), parts=[]; let cur="";
+  for(const w of words){
+    const cand=cur?cur+" "+w:w;
+    if(cur && cand.length>maxChars){ parts.push(cur); cur=w; } else cur=cand;
+    if(cur && ".!?…".includes(cur[cur.length-1]) && cur.length>=Math.min(18,maxChars)){ parts.push(cur); cur=""; }
+  }
+  if(cur) parts.push(cur);
+  const total=parts.reduce((a,p)=>a+p.length,0)||1, dur=end-start, cues=[]; let t=start;
+  parts.forEach((p,i)=>{ const ce=(i===parts.length-1)?end:t+dur*(p.length/total); cues.push({start:t,end:ce,text:p}); t=ce; });
+  return cues;
+}
+function edActiveCue(){
+  const seg=edActive(); if(!seg) return null;
+  const cues=edSplitCues(seg, edEC, edLines), t=$("ed-video").currentTime||0;
+  return cues.find(c=>t>=c.start-0.04 && t<c.end) || cues[0] || null;
+}
 function edRender(){   // skutečné rozměry zobrazeného videa (kvůli letterboxu)
   const v=$("ed-video");
   const vw=v.videoWidth||16, vh=v.videoHeight||9, cw=v.clientWidth||480, ch=v.clientHeight||270;
@@ -174,6 +196,7 @@ function edFitOverlay(){
   ov.style.fontSize=fs+"px";
   const fit=Math.max(6, Math.floor(R.w*0.92/(fs*0.6)));
   const ec=edChars>0 ? Math.min(edChars, fit) : fit;
+  edEC=ec;                       // efektivní znaků/řádek (pro dělení na cue)
   ov.style.maxWidth=ec+"ch";
   const padV=Math.max(0,(R.ch-R.h)/2);          // posuň titulky na obsah videa
   ov.style.bottom=(padV + R.h*0.06)+"px";
@@ -186,9 +209,9 @@ function edUpdateLen(){
   if(!cur){ el.textContent=""; el.classList.remove("warn"); return; }
   const txt=(edEditing?$("ed-overlay").textContent:cur.text)||"";
   const words=(txt.trim().match(/\S+/g)||[]).length;
-  const over=edMaxChars>0 && txt.length>edMaxChars;
-  el.textContent=words+" slov · "+txt.length+"/"+edMaxChars+(over?" · rozdělí se":"");
-  el.classList.toggle("warn",over);
+  const n=edSplitCues({text:txt,start:cur.start,end:cur.end}, edEC, edLines).length;
+  el.textContent=words+" slov · "+n+(n===1?" titulek":(n<5?" titulky":" titulků"));
+  el.classList.remove("warn");   // rozdělení je normální (náhled ho ukazuje)
 }
 function edSetLines(n){ edLines=(n===1?1:2); $("ed-line1").classList.toggle("active",edLines===1); $("ed-line2").classList.toggle("active",edLines===2); }
 function gotoTime(t){ const v=$("ed-video"); v.pause(); v.currentTime=Math.max(0,t+0.02); edSync(); }
@@ -219,7 +242,10 @@ function edSync(){
     $("ed-srchint").textContent=cur?(cur.src||""):"";
     edLast=cur;
   }
-  if(!edEditing) ov.textContent=cur?cur.text:"";   // při psaní do obrazu nepřepisuj
+  if(!edEditing){                                  // náhled = aktuální KRÁTKÝ titulek (jako výstup)
+    const cue=edActiveCue();
+    ov.textContent=cue?cue.text:"";
+  }
   edUpdateLen();
 }
 async function openEditor(id){
@@ -291,18 +317,18 @@ $("ed-track").addEventListener("click",e=>{
   gotoTime((e.clientX-r.left)/r.width*dur);
 });
 // volby titulků: znaků/řádek + počet řádků
-$("ed-size").addEventListener("change",()=>{ edSize=$("ed-size").value; edDirty=true; edFitOverlay(); });
-$("ed-chars").addEventListener("change",()=>{ edChars=parseInt($("ed-chars").value)||0; edDirty=true; edFitOverlay(); });
-$("ed-line1").addEventListener("click",()=>{ edSetLines(1); edDirty=true; edFitOverlay(); });
-$("ed-line2").addEventListener("click",()=>{ edSetLines(2); edDirty=true; edFitOverlay(); });
+$("ed-size").addEventListener("change",()=>{ edSize=$("ed-size").value; edDirty=true; edFitOverlay(); edSync(); });
+$("ed-chars").addEventListener("change",()=>{ edChars=parseInt($("ed-chars").value)||0; edDirty=true; edFitOverlay(); edSync(); });
+$("ed-line1").addEventListener("click",()=>{ edSetLines(1); edDirty=true; edFitOverlay(); edSync(); });
+$("ed-line2").addEventListener("click",()=>{ edSetLines(2); edDirty=true; edFitOverlay(); edSync(); });
 $("ed-srt").addEventListener("click",downloadSrt);
 // editace PŘÍMO v obraze (klikni na titulek na videu a piš)
 const _ov=$("ed-overlay");
-_ov.addEventListener("click",()=>{ if(_ov.getAttribute("contenteditable")!=="true" && edActive()){ $("ed-video").pause(); _ov.setAttribute("contenteditable","true"); _ov.focus(); }});
+_ov.addEventListener("click",()=>{ const s=edActive(); if(_ov.getAttribute("contenteditable")!=="true" && s){ $("ed-video").pause(); edEditing=true; _ov.textContent=s.text; _ov.setAttribute("contenteditable","true"); _ov.focus(); edUpdateLen(); }});
 _ov.addEventListener("focus",()=>{ edEditing=true; $("ed-video").pause(); });
 _ov.addEventListener("input",()=>{ const s=edActive(); if(s){ s.text=_ov.textContent; edDirty=true; } edUpdateLen(); });
 window.addEventListener("resize",()=>{ if(!$("editmodal").classList.contains("hidden")) edFitOverlay(); });
-_ov.addEventListener("blur",()=>{ edEditing=false; _ov.setAttribute("contenteditable","false"); });
+_ov.addEventListener("blur",()=>{ edEditing=false; _ov.setAttribute("contenteditable","false"); edSync(); });
 _ov.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); _ov.blur(); }});
 $("ed-close").addEventListener("click",saveAndClose);
 $("ed-cancel").addEventListener("click",saveAndClose);
