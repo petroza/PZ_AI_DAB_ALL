@@ -338,7 +338,7 @@ def _build_ass_karaoke(segments: list, vid_w: int, vid_h: int, font: str, size: 
     vybarveného slova, secondary = barva ještě nevyřčeného (základ)."""
     events = []
     for seg in segments:
-        toks = seg.get("tokens") or [{"w": w} for w in str(seg.get("text", "")).split()]
+        toks = seg.get("tokens") or [{"w": w} for w in (seg.get("text") or "").split()]
         start = float(seg.get("start", 0) or 0)
         end = float(seg.get("end", start) or start)
         ktext = _karaoke_segment(toks, start, end, chars, max_lines)

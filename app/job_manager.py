@@ -81,13 +81,18 @@ class JobManager:
         for f in config.JOBS_DIR.glob("*.json"):
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
-                if data.get("status") in _RUNNING_STATUSES:
-                    data["status"] = "error"
-                    data["progress"] = 0
-                    data["error"] = "Job byl přerušen restartem serveru."
-                    data["finished_at"] = _now()
-                    f.write_text(json.dumps(data, ensure_ascii=False, indent=2),
-                                 encoding="utf-8")
+                status = data.get("status")
+                if status not in _RUNNING_STATUSES:
+                    continue
+                # queued + started_at=None → jen nahráno, ještě nezahájeno → ponech
+                if status == "queued" and not data.get("started_at"):
+                    continue
+                data["status"] = "error"
+                data["progress"] = 0
+                data["error"] = "Job byl přerušen restartem serveru."
+                data["finished_at"] = _now()
+                f.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                             encoding="utf-8")
             except Exception:
                 pass
 
