@@ -437,22 +437,21 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
                 vw, vh = ffmpeg_tools.get_video_size(out_video, log)
                 preset = getattr(job, "subs_preset", "classic")
                 bopts = _burn_preset_opts(preset, vw, vh)
-                # Uživatelské volby z editoru: znaků/řádek a počet řádků (1/2).
+                # Uživatelské volby z editoru: velikost, znaků/řádek, počet řádků.
                 u_chars = int(getattr(job, "subs_chars", 0) or 0)
                 u_lines = int(getattr(job, "subs_maxlines", 0) or 0)
+                u_size = str(getattr(job, "subs_size", "") or "")
                 if u_lines in (1, 2):
                     bopts["maxlines"] = u_lines
-                # Přizpůsob titulek ŠÍŘCE videa, ať NEPŘETÉKÁ do stran (hlavně 9:16).
+                # VELIKOST řídí uživatel (podíl výšky videa), nezávisle na znacích.
+                _SZ = {"small": 0.035, "medium": 0.046, "large": 0.062, "xl": 0.08}
+                if u_size in _SZ and vh:
+                    bopts["size"] = max(12, round(vh * _SZ[u_size]))
+                # Znaky/řádek = jen zalomení; VŽDY omezené na to, co se na šířku
+                # vejde (~0.62·velikost = bezpečná šířka znaku) → nikdy nepřeteče.
                 if vw and vw > 0:
-                    if u_chars > 0:
-                        # uživatel zvolil znaků/řádek → VELIKOST PÍSMA tak, ať se
-                        # to na šířku videa vejde (víc znaků = menší písmo).
-                        bopts["chars"] = u_chars
-                        bopts["size"] = max(14, int(vw * 0.92 / (u_chars * 0.62)))
-                    else:
-                        # ~0.62·velikost = bezpečná šířka znaku (Arial bold + rezerva)
-                        fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
-                        bopts["chars"] = min(bopts.get("chars", 42), fit)
+                    fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
+                    bopts["chars"] = min(u_chars, fit) if u_chars > 0 else min(bopts.get("chars", 42), fit)
                 elif u_chars > 0:
                     bopts["chars"] = u_chars
                 # Generování cue podle počtu řádků

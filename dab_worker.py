@@ -151,6 +151,7 @@ def _make_local_job(job, src):
         "subs_preset": job.get("subs_preset") or "classic",
         "subs_chars": int(job.get("subs_chars") or 0),
         "subs_maxlines": int(job.get("subs_maxlines") or 2),
+        "subs_size": str(job.get("subs_size") or ""),
         "burn_subs": bool(job.get("burn_subs")),
         "llm_correct": bool(job.get("llm_correct", True)),
         "error": None, "started_at": now, "finished_at": None,

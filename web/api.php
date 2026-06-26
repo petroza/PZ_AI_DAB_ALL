@@ -46,7 +46,7 @@ case 'upload_init':
         'source_lang' => $sl, 'target_lang' => $tl, 'tts_engine' => $eng,
         'voice' => trim((string)($_POST['voice'] ?? '')),
         'audio_mode' => $am, 'subs_preset' => $preset,
-        'subs_chars' => 0, 'subs_maxlines' => 2,
+        'subs_chars' => 0, 'subs_maxlines' => 2, 'subs_size' => '',
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
         'review_text' => ((string)($_POST['review_text'] ?? '0')) === '1',
         'llm_correct' => ((string)($_POST['llm_correct'] ?? '1')) === '1',
@@ -114,6 +114,7 @@ case 'segments':
     jsend(['id' => $j['id'], 'status' => $j['status'] ?? '',
            'subs_chars' => (int)($j['subs_chars'] ?? 0),
            'subs_maxlines' => (int)($j['subs_maxlines'] ?? 2),
+           'subs_size' => (string)($j['subs_size'] ?? ''),
            'segments' => is_array($d['segments'] ?? null) ? $d['segments'] : []]);
 
 case 'approve':         // ulož + spusť dabing (fáze 2)
@@ -141,6 +142,10 @@ case 'save_segments':   // jen ulož (zůstává review – pro pozdější úpr
         json_encode(['segments' => $clean], JSON_UNESCAPED_UNICODE), LOCK_EX);
     if (isset($in['subs_chars']))    $j['subs_chars'] = max(0, min(60, (int)$in['subs_chars']));
     if (isset($in['subs_maxlines'])) $j['subs_maxlines'] = ((int)$in['subs_maxlines'] === 1) ? 1 : 2;
+    if (isset($in['subs_size'])) {
+        $sz = (string)$in['subs_size'];
+        $j['subs_size'] = in_array($sz, ['small','medium','large','xl'], true) ? $sz : '';
+    }
     if ($action === 'approve') { $j['status'] = 'approved'; $j['progress'] = 50; }   // → dabing
     else { $j['status'] = 'review'; }                                                // zůstává k úpravě
     $j['error'] = null;

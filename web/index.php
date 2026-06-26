@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header class="top">
@@ -107,12 +107,21 @@
       </div>
     </div>
     <div class="ed-controls">
+      <label>Velikost
+        <select id="ed-size">
+          <option value="">Auto</option>
+          <option value="small">Malé</option>
+          <option value="medium">Střední</option>
+          <option value="large">Velké</option>
+          <option value="xl">Obří</option>
+        </select>
+      </label>
       <label>Znaků/řádek
         <select id="ed-chars">
           <option value="0">Auto</option>
-          <option value="12">12</option><option value="14">14</option>
-          <option value="16">16</option><option value="18">18</option>
+          <option value="12">12</option><option value="16">16</option>
           <option value="20">20</option><option value="24">24</option>
+          <option value="30">30</option><option value="40">40</option>
         </select>
       </label>
       <span class="ed-lines-toggle">Řádky:
@@ -129,6 +138,6 @@
   </div>
 </div>
 
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

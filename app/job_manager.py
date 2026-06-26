@@ -43,6 +43,7 @@ class DubJob:
     subs_preset: str = "classic"                 # classic | reels | reels_box | word | karaoke…
     subs_chars: int = 0                          # max znaků/řádek (0 = auto dle šířky videa)
     subs_maxlines: int = 2                       # 1 nebo 2 řádky
+    subs_size: str = ""                          # velikost: ""=auto | small|medium|large|xl
     llm_correct: bool = True
 
     status: str = "queued"

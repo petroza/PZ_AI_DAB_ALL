@@ -180,3 +180,6 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 .ed-lbtn{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;width:30px;height:28px;cursor:pointer;font-weight:600}
 .ed-lbtn.active{background:var(--srt);color:#04201f;border-color:var(--srt)}
 #ed-srt{margin-left:auto}
+
+/* ---- overlay centrovaný (max-width řídí JS dle velikosti+znaků) ---- */
+.ed-overlay{left:50%!important;right:auto!important;transform:translateX(-50%);margin:0 auto}

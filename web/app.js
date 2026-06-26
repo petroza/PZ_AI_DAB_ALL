@@ -155,21 +155,29 @@ async function delJob(id){
 
 // ---- editor titulků na videu (video-centric, jako ElevenLabs) ----
 let edId=null, edSegs=[], edLast=null, edEditing=false, edMaxChars=0;
-let edChars=0, edLines=2, edDirty=false;   // znaků/řádek (0=auto), počet řádků, neuložené změny
+let edChars=0, edLines=2, edSize="", edDirty=false;   // znaků/řádek, řádky, velikost, změny
+const ED_SIZE={small:0.035, medium:0.046, large:0.062, xl:0.08};   // podíl VÝŠKY videa
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
 function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
-function edVideoW(){ const wrap=document.querySelector('.ed-video-wrap'); return (wrap&&wrap.clientWidth)||$("ed-video").clientWidth||480; }
-function edEffChars(){
-  if(edChars>0) return edChars;
-  const w=edVideoW(), fs=Math.max(13,Math.round(w*0.05));   // auto: ~5 % šířky videa
-  return Math.max(8,Math.floor(w*0.9/(fs*0.55)));
+function edRender(){   // skutečné rozměry zobrazeného videa (kvůli letterboxu)
+  const v=$("ed-video");
+  const vw=v.videoWidth||16, vh=v.videoHeight||9, cw=v.clientWidth||480, ch=v.clientHeight||270;
+  const sc=Math.min(cw/vw, ch/vh)||1;
+  return {w:vw*sc, h:vh*sc, cw, ch};
 }
 function edFitOverlay(){
-  // VELIKOST PÍSMA tak, aby se zvolený počet znaků/řádek vešel na šířku videa
-  // → náhled = formát videa, nikdy nepřeteče do stran.
-  const ov=$("ed-overlay"), w=edVideoW(), ec=edEffChars();
-  ov.style.fontSize=Math.max(13, Math.round(w*0.92/(ec*0.62)))+"px";
-  edMaxChars=ec*edLines;                 // kolik znaků se pohodlně vejde
+  // VELIKOST řídí uživatel (podíl výšky videa); znaky/řádek jen ZALAMUJE a nikdy
+  // nepřeteče (omezí se na to, co se na šířku vejde).
+  const ov=$("ed-overlay"), R=edRender();
+  const fs=Math.max(12, Math.round(R.h*(ED_SIZE[edSize]||0.05)));
+  ov.style.fontSize=fs+"px";
+  const fit=Math.max(6, Math.floor(R.w*0.92/(fs*0.6)));
+  const ec=edChars>0 ? Math.min(edChars, fit) : fit;
+  ov.style.maxWidth=ec+"ch";
+  const padV=Math.max(0,(R.ch-R.h)/2);          // posuň titulky na obsah videa
+  ov.style.bottom=(padV + R.h*0.06)+"px";
+  const sh=$("ed-srchint"); if(sh) sh.style.top=(padV + R.h*0.035)+"px";
+  edMaxChars=ec*edLines;
   edUpdateLen();
 }
 function edUpdateLen(){
@@ -224,8 +232,8 @@ async function openEditor(id){
   let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(id)); }
   catch{ ov.textContent="Text se nepodařilo načíst."; return; }
   edSegs=(d.segments||[]).map(s=>({start:+s.start, end:+s.end, text:s.text||"", src:s.src||"", marker:null}));
-  edChars=+(d.subs_chars||0); edLines=(+d.subs_maxlines===1?1:2);
-  $("ed-chars").value=String(edChars); edSetLines(edLines);
+  edChars=+(d.subs_chars||0); edLines=(+d.subs_maxlines===1?1:2); edSize=String(d.subs_size||"");
+  $("ed-chars").value=String(edChars); edSetLines(edLines); $("ed-size").value=edSize;
   ov.textContent="";
   v.src=API+"?action=stream&id="+encodeURIComponent(id)+"&kind=source"; v.load();
   v.ontimeupdate=edSync; v.onseeked=edSync;
@@ -251,7 +259,7 @@ async function pushSegments(action){
   if(!segs.length) throw new Error("Po úpravě nezůstal žádný text");
   const r=await fetch(API+"?action="+action,{method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({id:edId, segments:segs, subs_chars:edChars, subs_maxlines:edLines})});
+    body:JSON.stringify({id:edId, segments:segs, subs_chars:edChars, subs_maxlines:edLines, subs_size:edSize})});
   const j=await r.json();
   if(j.error) throw new Error(j.error);
   edDirty=false;
@@ -282,6 +290,7 @@ $("ed-track").addEventListener("click",e=>{
   gotoTime((e.clientX-r.left)/r.width*dur);
 });
 // volby titulků: znaků/řádek + počet řádků
+$("ed-size").addEventListener("change",()=>{ edSize=$("ed-size").value; edDirty=true; edFitOverlay(); });
 $("ed-chars").addEventListener("change",()=>{ edChars=parseInt($("ed-chars").value)||0; edDirty=true; edFitOverlay(); });
 $("ed-line1").addEventListener("click",()=>{ edSetLines(1); edDirty=true; edFitOverlay(); });
 $("ed-line2").addEventListener("click",()=>{ edSetLines(2); edDirty=true; edFitOverlay(); });
