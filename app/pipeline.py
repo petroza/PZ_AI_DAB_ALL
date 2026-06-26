@@ -49,12 +49,29 @@ def _merge_segments(segs, min_slot: float = 2.8, max_slot: float = 9.0) -> list:
     return out
 
 
-def _subtitle_cues(segs, max_chars: int = 45, max_dur: float = 5.0) -> list:
-    """Rozdělí (sloučené) bloky na čitelné titulkové kusy s proporčním časem.
+def _wrap_two_lines(text: str, max_line: int = 42) -> str:
+    """Zalomí titulek na max 2 řádky (zlom co nejblíž půlce, na hranici slov)."""
+    if len(text) <= max_line:
+        return text
+    words = text.split()
+    if len(words) < 2:
+        return text
+    target, acc, best_i, best_d = len(text) / 2, 0, 0, 1e9
+    for i in range(len(words) - 1):
+        acc += len(words[i]) + 1
+        if abs(acc - target) < best_d:
+            best_d, best_i = abs(acc - target), i
+    return " ".join(words[:best_i + 1]) + "\n" + " ".join(words[best_i + 1:])
 
-    Po sloučení segmentů pro dabing jsou bloky dlouhé; titulky ale chtějí
-    krátké řádky. Text se rozseká na hranicích slov do ~max_chars a časový
-    úsek bloku se rozdělí proporčně podle délky kusů.
+
+def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
+                   min_dur: float = 1.0) -> list:
+    """Rozdělí (sloučené) bloky na čitelné titulky (≤2 řádky) s proporčním časem.
+
+    Po sloučení segmentů pro dabing jsou bloky dlouhé; titulky chtějí krátké
+    cue. Text se sype do kusů do ~max_chars (≈ 2 řádky) a ≤ max_dur s, čas se
+    dělí proporčně podle délky. Příliš krátký poslední kus se přilepí k
+    předchozímu (žádná osamocená slova jako „dříve.").
     """
     cues = []
     for s in segs:
@@ -63,23 +80,36 @@ def _subtitle_cues(segs, max_chars: int = 45, max_dur: float = 5.0) -> list:
         end = float(s.get("end") or 0.0)
         if not text or end <= start:
             continue
-        words = text.split()
-        lines, cur = [], ""
+        block_dur = end - start
+        cps = max(1.0, len(text)) / block_dur          # znaků za sekundu v bloku
+        words, parts, cur = text.split(), [], ""
         for w in words:
-            if cur and len(cur) + 1 + len(w) > max_chars:
-                lines.append(cur)
+            cand = (cur + " " + w) if cur else w
+            if cur and (len(cand) > max_chars or len(cand) / cps > max_dur):
+                parts.append(cur)
                 cur = w
             else:
-                cur = (cur + " " + w) if cur else w
+                cur = cand
+            # zlom na konci věty, ať cue nepřekrývá dvě věty
+            if cur and cur[-1] in ".!?…" and len(cur) >= 28:
+                parts.append(cur)
+                cur = ""
         if cur:
-            lines.append(cur)
-        total = sum(len(x) for x in lines) or 1
-        t = start
-        for i, ln in enumerate(lines):
-            dur = (end - start) * (len(ln) / total)
-            ce = end if i == len(lines) - 1 else min(t + dur, end)
-            cues.append({"start": round(t, 3), "end": round(ce, 3), "text": ln})
+            parts.append(cur)
+        total = sum(len(p) for p in parts) or 1
+        local, t = [], start
+        for i, p in enumerate(parts):
+            dur = block_dur * (len(p) / total)
+            ce = end if i == len(parts) - 1 else t + dur
+            local.append([round(t, 3), round(ce, 3), p])
             t = ce
+        # přilep moc krátký poslední kus k předchozímu
+        if len(local) >= 2 and (local[-1][1] - local[-1][0]) < min_dur:
+            local[-2][1] = local[-1][1]
+            local[-2][2] = (local[-2][2] + " " + local[-1][2]).strip()
+            local.pop()
+        for st_, en_, tx in local:
+            cues.append({"start": st_, "end": en_, "text": _wrap_two_lines(tx)})
     return cues
 
 
