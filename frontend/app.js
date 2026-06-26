@@ -158,24 +158,50 @@ function _setPicked(msg, isErr) {
   el.classList.toggle("err", !!isErr);
 }
 
-async function uploadFile(file) {
+function _upbar(show, pct) {
+  const bar = $("upbar"), fill = $("upbar-fill");
+  if (bar) bar.classList.toggle("hidden", !show);
+  if (fill && pct != null) fill.style.width = pct + "%";
+}
+
+function uploadFile(file) {
+  // XHR (ne fetch) kvůli sledování průběhu nahrávání → progress bar.
   _setPicked("Nahrávám: " + file.name + " …", false);
+  _upbar(true, 0);
+  $("start").disabled = true;
   const fd = new FormData(); fd.append("file", file);
-  try {
-    const r = await fetch(api("/api/upload"), { method: "POST", body: fd });
-    if (!r.ok) {
-      _setPicked("Chyba: " + (await r.text()), true);
-      $("file").value = "";
-      return;
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", api("/api/upload"));
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round(e.loaded / e.total * 100);
+      _upbar(true, pct);
+      _setPicked("Nahrávám: " + file.name + " … " + pct + "%", false);
     }
-    const data = await r.json();
-    currentJob = data.job_id;
-    _setPicked("Připraveno: " + file.name, false);
-    $("start").disabled = false;
-  } catch (e) {
-    _setPicked("Chyba nahrávání: " + e, true);
-    $("file").value = "";
-  }
+  };
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        currentJob = data.job_id;
+        _upbar(true, 100);
+        _setPicked("Připraveno: " + file.name, false);
+        $("start").disabled = false;
+        setTimeout(() => _upbar(false, 0), 900);
+      } catch (_) {
+        _setPicked("Chyba: neplatná odpověď serveru.", true);
+        _upbar(false, 0); $("file").value = "";
+      }
+    } else {
+      _setPicked("Chyba: " + (xhr.responseText || xhr.status), true);
+      _upbar(false, 0); $("file").value = "";
+    }
+  };
+  xhr.onerror = () => {
+    _setPicked("Chyba nahrávání (spojení / běží worker?).", true);
+    _upbar(false, 0); $("file").value = "";
+  };
+  xhr.send(fd);
 }
 
 async function startDub() {
