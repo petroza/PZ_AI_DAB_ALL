@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <header class="top">
@@ -31,7 +31,7 @@
 
   <section class="panel">
     <h2>2 · Nastavení dabingu</h2>
-    <div class="grid">
+    <div class="grid grid-3">
       <label>Zdrojový jazyk <select id="source_lang"></select></label>
       <label>Cílový jazyk <select id="target_lang"></select></label>
       <label>Překladač
@@ -42,6 +42,8 @@
           <option value="deepl">DeepL (online, potřebuje klíč)</option>
         </select>
       </label>
+    </div>
+    <div class="grid grid-voice">
       <label>Hlasový engine
         <select id="tts_engine">
           <option value="piper">Piper — offline (výchozí)</option>
@@ -64,9 +66,10 @@
         <label class="rad"><input type="radio" name="audio_mode" value="replace" checked> Nahradit dabingem</label>
         <label class="rad"><input type="radio" name="audio_mode" value="voiceover"> Voice-over přes ztlumený originál</label>
       </fieldset>
-      <div class="checks">
+      <fieldset class="seg">
+        <legend>Titulky a text</legend>
         <label class="chk"><input id="burn_subs" type="checkbox"> Zapéct titulky do videa</label>
-        <label id="preset-wrap" class="chk hidden" style="display:block">Styl titulků
+        <label id="preset-wrap" class="chk hidden">Styl titulků
           <select id="subs_preset">
             <option value="classic">16:9 klasické (dole)</option>
             <option value="reels">9:16 Reels/Stories — velké tučné</option>
@@ -79,7 +82,7 @@
         </label>
         <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>
         <label class="chk"><input id="review_text" type="checkbox"> ✏️ Upravit text před dabingem</label>
-      </div>
+      </fieldset>
     </div>
     <button id="start" class="go" disabled>Nahrát a dabovat</button>
     <p id="hint" class="formhint"></p>

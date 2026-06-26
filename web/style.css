@@ -183,3 +183,16 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 
 /* ---- overlay centrovaný (max-width řídí JS dle velikosti+znaků) ---- */
 .ed-overlay{left:50%!important;right:auto!important;transform:translateX(-50%);margin:0 auto}
+
+/* ---- formulář „Nastavení dabingu": čistší zarovnání ---- */
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-voice{grid-template-columns:minmax(160px,1fr) minmax(220px,2fr)}
+.grid + .grid{margin-top:14px}
+.row{align-items:stretch}          /* oba boxy stejně vysoké */
+.row .seg{flex:1 1 300px}
+#preset-wrap{display:block;margin-top:8px}
+#preset-wrap.hidden{display:none}
+#preset-wrap select{margin-top:5px;width:100%}
+@media (max-width:600px){
+  .grid-3,.grid-voice{grid-template-columns:1fr}
+}
