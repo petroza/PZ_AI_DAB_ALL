@@ -24,3 +24,8 @@ voices/*
 # zdrojové skripty v tools/ (ne binárky) – ty chceme verzovat
 !tools/xtts_server.py
 !tools/dabtest.sh
+
+# Tajný worker token – jen lokálně/na serveru, ne do gitu
+web/config.php
+worker_config.json
+web/data/

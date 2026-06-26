@@ -1,0 +1,17 @@
+Options -Indexes
+DirectoryIndex index.php index.html
+
+AuthType Basic
+AuthName "ALLDUB - PZ AI DAB"
+AuthUserFile /web/htdocs/www.appcrate.cloud/home/www/ALLDUB/.htpasswd
+Require valid-user
+
+# worker_api.php je MIMO Basic Auth (PC worker se hlasi tokenem, ne heslem)
+<Files "worker_api.php">
+  Require all granted
+</Files>
+
+# citlive soubory nikdy nedavat ven
+<Files ~ "^\.(htpasswd|htaccess)$">
+  Require all denied
+</Files>
