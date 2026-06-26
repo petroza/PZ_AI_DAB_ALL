@@ -217,9 +217,15 @@ počítač (pokud výslovně nezvolíš cloudový překladač/hlas, který tu ne
 - Chatterbox — <https://github.com/resemble-ai/chatterbox>
 - Ollama — <https://ollama.com>
 
+## Autor
+
+**Autorem této aplikace je Petr Závorka.** Kdokoli ji použije, šíří, upraví nebo
+zapracuje do jiného díla či produktu, **musí Petra Závorku uvést jako autora**
+původní aplikace (a zachovat oznámení o autorských právech a licenci).
+
 ## Licence
 
-Kód: MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE).
+Kód: MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE) (vč. doložky o uvádění autora).
 
 **Modely a nástroje třetích stran** (TTS, ASR, překlad, ffmpeg…) mají vlastní,
 samostatné licence — viz [MODEL_LICENSES.md](MODEL_LICENSES.md). Pozor zejména na
