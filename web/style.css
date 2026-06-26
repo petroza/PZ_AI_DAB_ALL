@@ -1,16 +1,17 @@
 :root{
-  --ground:#0E1518; --surface:#15201F; --surface2:#1B2A29; --hair:#26393B;
-  --ink:#E7EFEF; --dim:#8FA1A1; --faint:#5F7273;
-  --srt:#3FC2CC; --voice:#E2A23C; --new:#74D69B; --bad:#E5685E;
-  --go-text:#0a1410; --bar-bg:#0c1313; --log-bg:#0a1010;
+  /* tmavé MODRÉ téma – hranaté a přesné */
+  --ground:#080C18; --surface:#0F1729; --surface2:#172138; --hair:#283656;
+  --ink:#E9EEFA; --dim:#93A4C8; --faint:#56688E;
+  --srt:#4D9CFF; --voice:#F0A93C; --new:#3B82F6; --bad:#F0635A;
+  --go-text:#FFFFFF; --bar-bg:#0A1326; --log-bg:#070D1C;
   --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
 }
 [data-theme="light"]{
-  --ground:#F0F7F7; --surface:#FFFFFF; --surface2:#E8F3F3; --hair:#BDD4D4;
-  --ink:#0D1F22; --dim:#3D6060; --faint:#6A9090;
-  --srt:#1A95A0; --voice:#B06B08; --new:#1A7A46; --bad:#C03830;
-  --go-text:#F0FBF5; --bar-bg:#C8DFDF; --log-bg:#1A2A2A;
+  --ground:#EEF2FB; --surface:#FFFFFF; --surface2:#E6ECF8; --hair:#C2CEE6;
+  --ink:#101A2E; --dim:#41527A; --faint:#6C7DA3;
+  --srt:#2563EB; --voice:#B5710A; --new:#2563EB; --bad:#D43A30;
+  --go-text:#FFFFFF; --bar-bg:#D4DCEF; --log-bg:#16213A;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.5}
@@ -20,7 +21,7 @@ a{color:var(--srt)}
   padding:14px 22px;border-bottom:1px solid var(--hair);background:var(--surface);
   position:sticky;top:0;z-index:5;flex-wrap:wrap}
 .top-right{display:flex;align-items:center;gap:10px}
-.theme-btn{background:none;border:1px solid var(--hair);border-radius:8px;
+.theme-btn{background:none;border:1px solid var(--hair);border-radius:4px;
   padding:5px 8px;font-size:.95rem;line-height:1;cursor:pointer;color:var(--dim);
   transition:border-color .15s,color .15s;flex-shrink:0}
 .theme-btn:hover{border-color:var(--srt);color:var(--srt)}
@@ -30,13 +31,13 @@ a{color:var(--srt)}
 .status .ok{color:var(--new)} .status .bad{color:var(--bad)}
 
 main{max-width:900px;margin:0 auto;padding:24px 22px 80px;display:flex;flex-direction:column;gap:20px}
-.panel{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:20px}
+.panel{background:var(--surface);border:1px solid var(--hair);border-radius:5px;padding:20px}
 .panel h2{margin:0 0 16px;font-size:1.05rem;font-weight:600;
   font-family:var(--mono);color:var(--dim);letter-spacing:.04em}
 
-.drop{border:1.5px dashed var(--hair);border-radius:12px;padding:34px 18px;text-align:center;
+.drop{border:1.5px dashed var(--hair);border-radius:5px;padding:34px 18px;text-align:center;
   cursor:pointer;transition:border-color .15s,background .15s;background:rgba(255,255,255,.012)}
-.drop:hover,.drop.over{border-color:var(--srt);background:rgba(63,194,204,.06)}
+.drop:hover,.drop.over{border-color:var(--srt);background:rgba(77,156,255,.07)}
 .drop-main{font-size:1.05rem;margin:0 0 6px}
 .drop-sub{color:var(--dim);font-size:.82rem;margin:0}
 .picked{color:var(--new);font-family:var(--mono);font-size:.85rem;margin:12px 0 0;min-height:1em}
@@ -46,17 +47,17 @@ main{max-width:900px;margin:0 auto;padding:24px 22px 80px;display:flex;flex-dire
 label{display:flex;flex-direction:column;gap:6px;font-size:.82rem;color:var(--dim)}
 .hint{color:var(--faint);font-weight:400}
 select,input[type=text],input[type=number]{background:var(--surface2);color:var(--ink);border:1px solid var(--hair);
-  border-radius:8px;padding:9px 10px;font-family:var(--sans);font-size:.92rem}
+  border-radius:4px;padding:9px 10px;font-family:var(--sans);font-size:.92rem}
 select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-color:var(--srt)}
 
 .row{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;align-items:flex-start}
-.seg{border:1px solid var(--hair);border-radius:10px;padding:8px 14px 12px;margin:0;flex:1 1 280px}
+.seg{border:1px solid var(--hair);border-radius:4px;padding:8px 14px 12px;margin:0;flex:1 1 280px}
 .seg legend{font-size:.74rem;color:var(--faint);font-family:var(--mono);padding:0 6px}
 .rad,.chk{display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-size:.88rem;color:var(--ink);margin-top:6px;cursor:pointer}
 .rad input,.chk input{margin-top:.2em;flex-shrink:0}
 .checks{display:flex;flex-direction:column;gap:6px;justify-content:center}
 
-.go{margin-top:18px;width:100%;background:var(--new);color:var(--go-text);border:none;border-radius:10px;
+.go{margin-top:18px;width:100%;background:var(--new);color:var(--go-text);border:none;border-radius:4px;
   padding:13px;font-size:1rem;font-weight:700;cursor:pointer;font-family:var(--mono);letter-spacing:.03em}
 .go:disabled{background:var(--surface2);color:var(--faint);cursor:not-allowed}
 .go:not(:disabled):hover{filter:brightness(1.07)}
@@ -64,20 +65,20 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 
 .jobs{display:flex;flex-direction:column;gap:12px}
 .empty{color:var(--faint);font-style:italic}
-.job{background:var(--surface2);border:1px solid var(--hair);border-radius:11px;padding:14px 16px}
-.job.error{border-color:rgba(229,104,94,.5)}
-.job.done{border-color:rgba(116,214,155,.4)}
+.job{background:var(--surface2);border:1px solid var(--hair);border-radius:5px;padding:14px 16px}
+.job.error{border-color:rgba(240,99,90,.5)}
+.job.done{border-color:rgba(59,130,246,.42)}
 .jhead{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .jname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jstat{font-family:var(--mono);font-size:.8rem;color:var(--srt);white-space:nowrap}
 .job.done .jstat{color:var(--new)} .job.error .jstat{color:var(--bad)}
 .jmeta{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin:4px 0 10px}
-.bar{height:6px;background:var(--bar-bg);border-radius:4px;overflow:hidden}
-.fill{height:100%;background:linear-gradient(90deg,var(--srt),var(--new));transition:width .4s;border-radius:4px}
+.bar{height:6px;background:var(--bar-bg);border-radius:2px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,var(--srt),var(--new));transition:width .4s;border-radius:2px}
 .job.error .fill{background:var(--bad)}
 .err{color:var(--bad);font-size:.82rem;margin-top:8px;font-family:var(--mono);word-break:break-word}
 .jactions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
-.dlbtn{background:var(--surface);border:1px solid var(--hair);border-radius:7px;padding:6px 11px;
+.dlbtn{background:var(--surface);border:1px solid var(--hair);border-radius:3px;padding:6px 11px;
   font-size:.8rem;text-decoration:none;color:var(--ink)}
 .dlbtn:hover{border-color:var(--srt);color:var(--srt)}
 .lnk{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.8rem;padding:6px 4px}
@@ -93,7 +94,7 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
   color:var(--dim);white-space:pre-wrap;word-break:break-word}
 .aebox{position:fixed;inset:auto 0 0 0;background:var(--surface);border-top:2px solid var(--voice);
   display:flex;flex-direction:column;z-index:21;max-width:680px;margin:0 auto;
-  border-radius:14px 14px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+  border-radius:5px 14px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
 .aebox.hidden{display:none}
 .aebody{padding:14px 20px 22px;overflow-y:auto;max-height:70vh}
 .aegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
@@ -111,7 +112,7 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 /* ---- editor textu před dabingem (modal) ---- */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:50;padding:14px}
 .modal.hidden{display:none}
-.modal-box{background:var(--surface);border:1px solid var(--hair);border-radius:14px;width:min(760px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-box{background:var(--surface);border:1px solid var(--hair);border-radius:5px;width:min(760px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--hair)}
 .modal-head b{color:var(--ink);font-size:1.02rem}
 .modal-sub{color:var(--dim);font-size:.82rem;padding:9px 16px 2px}
@@ -119,7 +120,7 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 .ed-seg{border-bottom:1px solid var(--hair);padding:9px 0}
 .ed-tc{color:var(--faint);font-size:.72rem;font-family:var(--mono)}
 .ed-src{color:var(--dim);font-size:.8rem;margin:3px 0 5px;font-style:italic}
-.ed-seg textarea{width:100%;background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:8px;padding:8px;font:inherit;font-size:.92rem;line-height:1.4;resize:vertical;min-height:40px;box-sizing:border-box}
+.ed-seg textarea{width:100%;background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:4px;padding:8px;font:inherit;font-size:.92rem;line-height:1.4;resize:vertical;min-height:40px;box-sizing:border-box}
 .ed-seg textarea:focus{border-color:var(--srt);outline:none}
 .modal-foot{display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--hair)}
 .modal-foot .go{margin-top:0;width:auto;padding:11px 20px}
@@ -128,14 +129,14 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 
 /* ---- živý editor titulků na videu ---- */
 .modal-box.ed-wide{width:min(640px,100%)}
-.ed-video-wrap{position:relative;background:#000;margin:12px 16px 0;border-radius:10px;overflow:hidden}
+.ed-video-wrap{position:relative;background:#000;margin:12px 16px 0;border-radius:4px;overflow:hidden}
 #ed-video{width:100%;max-height:46vh;display:block;background:#000}
 .ed-overlay{position:absolute;left:5%;right:5%;bottom:7%;text-align:center;color:#fff;
   font-weight:800;font-size:clamp(15px,4.4vw,30px);line-height:1.16;white-space:pre-wrap;
   letter-spacing:.2px;text-shadow:0 0 3px #000,0 2px 5px #000,0 0 9px #000,1px 1px 0 #000;
   cursor:pointer;word-break:break-word}
 .ed-overlay:empty{display:none}
-.ed-seg.active{background:var(--surface2);border-radius:8px;padding-left:8px;padding-right:8px}
+.ed-seg.active{background:var(--surface2);border-radius:4px;padding-left:8px;padding-right:8px}
 .ed-seg.active .ed-tc{color:var(--voice)}
 .ed-seg.active textarea{border-color:var(--voice)}
 .ed-tc{cursor:pointer}
@@ -143,19 +144,19 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 
 /* ---- timeline + editace přímo v obraze ---- */
 .ed-timeline{display:flex;align-items:center;gap:10px;margin:10px 16px 0}
-.ed-play{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:50%;
+.ed-play{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:4px;
   width:36px;height:36px;min-width:36px;cursor:pointer;font-size:13px;line-height:1;display:flex;
   align-items:center;justify-content:center}
 .ed-play:hover{border-color:var(--srt);color:var(--srt)}
 .ed-time{font-family:var(--mono);font-size:.74rem;color:var(--dim);min-width:92px;flex-shrink:0}
-.ed-track{position:relative;flex:1;height:28px;background:var(--bar-bg);border-radius:7px;cursor:pointer;overflow:hidden}
+.ed-track{position:relative;flex:1;height:28px;background:var(--bar-bg);border-radius:3px;cursor:pointer;overflow:hidden}
 .ed-markers{position:absolute;inset:0}
-.ed-marker{position:absolute;top:7px;height:14px;background:var(--srt);opacity:.45;border-radius:3px;min-width:2px}
+.ed-marker{position:absolute;top:7px;height:14px;background:var(--srt);opacity:.45;border-radius:2px;min-width:2px}
 .ed-marker.active{opacity:1;background:var(--voice)}
 .ed-playhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 5px #000,0 0 2px #000;pointer-events:none;left:0}
 .ed-overlay{user-select:none}
 .ed-overlay[contenteditable="true"]{user-select:text;outline:2px dashed var(--voice);
-  background:rgba(0,0,0,.30);border-radius:8px;padding:2px 10px;cursor:text}
+  background:rgba(0,0,0,.30);border-radius:4px;padding:2px 10px;cursor:text}
 
 /* ---- editor video-centric (bez seznamu) ---- */
 #ed-video{max-height:58vh}
@@ -168,16 +169,16 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 /* ---- ukazatel délky titulku + font dle šířky videa ---- */
 #ed-overlay{font-size:22px}   /* výchozí; JS přepočítá dle šířky videa */
 .ed-len{position:absolute;top:8px;right:10px;background:rgba(0,0,0,.55);color:#dfe9e9;
-  font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:7px;pointer-events:none;letter-spacing:.2px}
+  font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:3px;pointer-events:none;letter-spacing:.2px}
 .ed-len:empty{display:none}
 .ed-len.warn{background:rgba(210,70,50,.9);color:#fff}
 
 /* ---- ovládání editoru: znaků/řádek, řádky, SRT ---- */
 .ed-controls{display:flex;align-items:center;gap:14px;margin:9px 16px 0;flex-wrap:wrap}
 .ed-controls>label{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--dim)}
-.ed-controls select{background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:4px 7px;font:inherit;font-size:.82rem}
+.ed-controls select{background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:3px;padding:4px 7px;font:inherit;font-size:.82rem}
 .ed-lines-toggle{display:flex;align-items:center;gap:5px;font-size:.82rem;color:var(--dim)}
-.ed-lbtn{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;width:30px;height:28px;cursor:pointer;font-weight:600}
+.ed-lbtn{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:3px;width:30px;height:28px;cursor:pointer;font-weight:600}
 .ed-lbtn.active{background:var(--srt);color:#04201f;border-color:var(--srt)}
 #ed-srt{margin-left:auto}
 
