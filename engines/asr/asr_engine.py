@@ -388,6 +388,24 @@ def _argos_translate(text: str, src_locale: str, tgt_locale: str) -> str:
     return text
 
 
+# gemma4 občas vrátí ORIGINÁL beze změny (echo) místo překladu → půl videa pak
+# zůstane anglicky. Tahle detekce to pozná a překlad se zopakuje.
+_EN_STOP_RE = re.compile(
+    r"\b(the|and|because|been|are|you|your|need|with|will|this|that|these|those|"
+    r"they|have|has|from|companies|company|things|harness|runtime|tools|models|"
+    r"operate|build|building|going|system|everything|smarter|cheaper|faster|better)\b",
+    re.I)
+
+
+def _seems_untranslated(out: str, src: str, target: str) -> bool:
+    """True když výstup vypadá nepřeložený (echo vstupu nebo plný angličtiny)."""
+    if out.strip().lower() == (src or "").strip().lower():
+        return True
+    if (target or "").startswith("cs"):
+        return len(_EN_STOP_RE.findall(out)) >= 2
+    return False
+
+
 def llm_translate(text: str, target: str, log: LogFn = None,
                   source: str = "auto", max_chars: int = 0) -> str:
     """Přeloží titulkový řádek do cílového jazyka.
@@ -408,31 +426,49 @@ def llm_translate(text: str, target: str, log: LogFn = None,
         fit = (f" DŮLEŽITÉ: překlad se musí dát přirozeně vyslovit za stejnou dobu "
                f"jako originál, proto buď stručný a vejdi se do {max_chars} znaků – "
                f"klidně zkrať a zjednoduš formulaci, ale zachovej hlavní sdělení.")
-    try:
-        import requests
-        prompt = (f"Přelož VĚRNĚ a přesně následující titulek do {tname} – nic "
-                  f"nepřidávej ani neměň význam.{fit} Text je pro DABING (čte ho "
-                  f"hlas), proto nepoužívej zkratky ani symboly – vše vypiš slovy "
-                  f"(např. místo „vs.“ napiš „oproti“). Zachovej "
-                  f"smysl{'' if fit else ' i styl'}, vrať POUZE překlad – žádný "
-                  f"komentář, žádné uvozovky.\n\n{text}")
-        r = requests.post(
-            config.OLLAMA_URL,
-            json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False,
-                  "keep_alive": "10m", "options": {"temperature": 0.1, "num_predict": 512}},
-            timeout=config.LLM_TIMEOUT,
-        )
-        r.raise_for_status()
-        out = (r.json().get("response") or "").strip().strip('"').strip("`").strip()
-        if out:
-            return out
-    except Exception:
-        pass
+    base_prompt = (f"Přelož VĚRNĚ a přesně následující titulek do {tname} – nic "
+                   f"nepřidávej ani neměň význam.{fit} Text je pro DABING (čte ho "
+                   f"hlas), proto nepoužívej zkratky ani symboly – vše vypiš slovy "
+                   f"(např. místo „vs.“ napiš „oproti“). Zachovej "
+                   f"smysl{'' if fit else ' i styl'}, vrať POUZE překlad – žádný "
+                   f"komentář, žádné uvozovky.\n\n{text}")
+    # Razantní prompt, když model „echuje“ originál (vrací ho nepřeložený).
+    force_prompt = (f"Následující text je v cizím jazyce. Přelož ho CELÝ do "
+                    f"{tname}. ANI JEDNO slovo nenech v původním jazyce. "
+                    f"Vrať POUZE překlad, nic jiného:\n\n{text}")
+    # Až 4 pokusy s eskalací – Ollama může přechodně selhat (timeout, VRAM), NEBO
+    # gemma4 vrátí originál beze změny (echo → půl videa pak zůstalo anglicky).
+    # Na pozdější pokusy přitvrdíme prompt i teplotu, ať se model „odlepí“.
+    import time as _t
+    last = None
+    for attempt in range(4):
+        forceful = attempt >= 2
+        try:
+            import requests
+            r = requests.post(
+                config.OLLAMA_URL,
+                json={"model": config.OLLAMA_MODEL,
+                      "prompt": force_prompt if forceful else base_prompt,
+                      "stream": False, "keep_alive": "30m",
+                      "options": {"temperature": 0.5 if forceful else 0.1,
+                                  "num_predict": 512}},
+                timeout=config.LLM_TIMEOUT,
+            )
+            r.raise_for_status()
+            out = (r.json().get("response") or "").strip().strip('"').strip("`").strip()
+            if out and not _seems_untranslated(out, text, target):
+                return out
+            last = "prázdná odpověď" if not out else "vrátil původní jazyk (echo)"
+        except Exception as e:
+            last = e
+        if attempt < 3:
+            _t.sleep(0.8 * (attempt + 1))
+    _log(log, f"POZOR: překlad přes Ollamu selhal po 4 pokusech ({last}). "
+             f"Segment zůstává v původním jazyce!")
     # Fallback: argostranslate (plně offline, automatické stažení balíčku)
     if (source or "auto") == "auto":
-        _log(log, "Ollama nedostupná, zdrojový jazyk neznámý → překlad přeskočen (nastav zdrojový jazyk nebo spusť Ollamu).")
         return text
-    _log(log, "Ollama nedostupná → zkouším argostranslate offline překlad…")
+    _log(log, "Zkouším argostranslate offline překlad…")
     return _argos_translate(text, source, target)
 
 
