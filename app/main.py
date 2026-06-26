@@ -120,9 +120,17 @@ async def api_upload(file: UploadFile = File(...)) -> dict:
             shutil.copyfileobj(file.file, out)
     except Exception as e:
         jobs.delete(job.id)
+        try:
+            upload_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         raise HTTPException(500, f"Nahrání souboru selhalo: {e}")
     if not upload_path.is_file() or upload_path.stat().st_size == 0:
         jobs.delete(job.id)
+        try:
+            upload_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         raise HTTPException(500, "Nahrání selhalo: prázdný soubor.")
     jobs.update(job.id, upload_path=str(upload_path),
                 is_video=(ext in config.SUPPORTED_VIDEO_EXT))

@@ -55,7 +55,7 @@ async function loadStatus() {
   if (s.ollama && s.ollama.ok) {
     bits.push("překlad ✓");
   } else if (s.argostranslate && s.argostranslate.ok) {
-    bits.push(`překlad (offline${s.argostranslate.langs > 0 ? " · " + s.argostranslate.langs + " párů" : ""})`);
+    bits.push(`překlad (offline${s.argostranslate.langs > 0 ? " · " + s.argostranslate.langs + " jazyků" : ""})`);
   } else {
     bits.push("překlad ✗");
   }
