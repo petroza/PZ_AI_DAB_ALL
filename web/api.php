@@ -36,13 +36,15 @@ case 'upload_init':
     if (!in_array($eng, TTS_ENGINES, true)) $eng = 'piper';
     $am = (string)($_POST['audio_mode'] ?? 'replace');
     if (!in_array($am, AUDIO_MODES, true)) $am = 'replace';
+    $preset = (string)($_POST['subs_preset'] ?? 'classic');
+    if (!in_array($preset, ['classic','reels','reels_box'], true)) $preset = 'classic';
     $id = new_id();
     @file_put_contents(UP_DIR . '/' . $id . '.part', '');
     $job = [
         'id' => $id, 'filename' => basename($orig), 'ext' => $ext,
         'source_lang' => $sl, 'target_lang' => $tl, 'tts_engine' => $eng,
         'voice' => trim((string)($_POST['voice'] ?? '')),
-        'audio_mode' => $am,
+        'audio_mode' => $am, 'subs_preset' => $preset,
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
         'llm_correct' => ((string)($_POST['llm_correct'] ?? '1')) === '1',
         'is_video' => in_array($ext, $VIDEO_EXT, true),

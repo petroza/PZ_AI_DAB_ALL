@@ -26,6 +26,34 @@ _BURN_OPTS = {"font": "Arial", "size": 22, "align": 2, "marginv": 40,
               "chars": 0, "maxlines": 2, "bg": "none"}
 
 
+def _burn_preset_opts(preset: str, vid_w: int, vid_h: int) -> dict:
+    """Styl zapečených titulků podle presetu a VÝŠKY videa (aby seděl na 16:9
+    i 9:16). Velikost/okraj jsou podíl výšky → správně na libovolném rozlišení.
+
+      classic    – 16:9/na šířku: klasické titulky dole, střídmé.
+      reels      – 9:16 Reels/Stories: VELKÉ tučné v dolní třetině, silný okraj
+                   (trendy styl Instagram/Facebook/TikTok), krátké řádky.
+      reels_box  – jako reels, ale s poloprůhledným podkladovým boxem.
+    """
+    h = vid_h or 1080
+    p = (preset or "classic").lower()
+    if p in ("reels", "reels_box", "social", "9:16", "stories", "tiktok"):
+        size = max(22, round(h * 0.046))
+        return {
+            "font": "Arial", "size": size, "bold": True, "align": 2,
+            "marginv": round(h * 0.15),                 # dolní třetina (ne úplně dole)
+            "outline": max(2, round(size * 0.12)),      # silný okraj pro čitelnost
+            "maxlines": 2, "chars": 14,                 # 2-4 slova/řádek (úzké video)
+            "bg": "box" if p == "reels_box" else "none", "bgalpha": 30,
+        }
+    # classic 16:9 / na šířku
+    return {
+        "font": "Arial", "size": max(16, round(h * 0.048)), "bold": False,
+        "align": 2, "marginv": round(h * 0.055),
+        "maxlines": 2, "chars": 42, "bg": "none",
+    }
+
+
 def _merge_segments(segs, min_slot: float = 2.8, max_slot: float = 9.0) -> list:
     """Sloučí krátké/navazující segmenty do delších bloků.
 
@@ -305,8 +333,20 @@ def run_dub(jobs, job_id: str) -> None:
             if job.burn_subs:
                 prog("burning", 96)
                 burned = work / "burned.mp4"
+                vw, vh = ffmpeg_tools.get_video_size(out_video, log)
+                preset = getattr(job, "subs_preset", "classic")
+                bopts = _burn_preset_opts(preset, vw, vh)
+                # Reels/social = trendy „pár slov" cue → krátké titulky (vejdou
+                # se i s velkým fontem na úzké 9:16 video).
+                burn_srt = tgt_srt
+                if preset in ("reels", "reels_box", "social"):
+                    short = _subtitle_cues(out_segs, max_chars=28, max_dur=2.5)
+                    burn_srt = work / "reels.srt"
+                    exporters.write_srt({"segments": short}, burn_srt)
+                log(f"Zapékání titulků: preset={preset}"
+                    f" (video {vw}×{vh}, font {bopts['size']})")
                 ffmpeg_tools.burn_subtitles(
-                    out_video, tgt_srt, burned, opts=_BURN_OPTS, log=log,
+                    out_video, burn_srt, burned, opts=bopts, log=log,
                     progress_cb=lambda pct: prog("burning", 96 + int(pct * 0.03)))
                 out_video.unlink(missing_ok=True)
                 Path(burned).replace(out_video)

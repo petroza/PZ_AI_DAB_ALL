@@ -45,7 +45,8 @@ case 'worker_claim':
         'id' => $picked['id'], 'filename' => $picked['filename'], 'ext' => $picked['ext'],
         'source_lang' => $picked['source_lang'], 'target_lang' => $picked['target_lang'],
         'tts_engine' => $picked['tts_engine'], 'voice' => $picked['voice'] ?? '',
-        'audio_mode' => $picked['audio_mode'], 'burn_subs' => (bool)$picked['burn_subs'],
+        'audio_mode' => $picked['audio_mode'], 'subs_preset' => $picked['subs_preset'] ?? 'classic',
+        'burn_subs' => (bool)$picked['burn_subs'],
         'llm_correct' => (bool)$picked['llm_correct'], 'is_video' => (bool)$picked['is_video'],
     ]]);
 

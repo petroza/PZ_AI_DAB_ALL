@@ -47,6 +47,7 @@ async function startDub(){
     tts_engine:$("tts_engine").value, voice:$("voice").value.trim(),
     audio_mode:document.querySelector('input[name=audio_mode]:checked').value,
     burn_subs:$("burn_subs").checked?"1":"0",
+    subs_preset:$("subs_preset").value,
     llm_correct:$("llm_correct").checked?"1":"0",
   };
   try{
@@ -129,6 +130,7 @@ $("file").addEventListener("change",e=>{const f=e.target.files[0];if(f){picked=f
 $("start").addEventListener("click",startDub);
 $("jobs").addEventListener("click",e=>{const b=e.target.closest("[data-del]");if(b)delJob(b.getAttribute("data-del"));});
 $("voice").addEventListener("focus",()=>{const h=$("voice-hint");if(h&&$("tts_engine").value==="xtts")h.textContent="prázdné=klon · Ž: Daisy/Alison/Gracie · M: Damien/Aaron/Baldur";});
+$("burn_subs").addEventListener("change",e=>{$("preset-wrap").classList.toggle("hidden",!e.target.checked);});
 
 (function(){const root=document.documentElement,btn=$("theme-btn");
   function ap(d){root.setAttribute("data-theme",d?"dark":"light");btn.textContent=d?"🌙":"☀️";}

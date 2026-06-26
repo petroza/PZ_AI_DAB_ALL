@@ -119,6 +119,7 @@ def process(job):
         "tts_engine": job.get("tts_engine") or "piper",
         "voice": (job.get("voice") or None),
         "audio_mode": job.get("audio_mode") or "replace",
+        "subs_preset": job.get("subs_preset") or "classic",
         "burn_subs": bool(job.get("burn_subs")),
         "llm_correct": bool(job.get("llm_correct", True)),
         "error": None, "started_at": now, "finished_at": None,
@@ -131,10 +132,10 @@ def process(job):
     last = -1
     while t.is_alive():
         lo = jobs.get(lj.id)
-        if lo and lo.progress != last:
+        if lo and lo.progress - last >= 3:        # méně častý progress (rate-limit)
             last = lo.progress
             progress(rid, max(5, min(98, lo.progress)))
-        time.sleep(2)
+        time.sleep(6)
     t.join(timeout=5)
 
     lo = jobs.get(lj.id)
@@ -181,9 +182,15 @@ def main():
     while True:
         try:
             job = claim()
+        except requests.HTTPError as e:
+            code = getattr(e.response, "status_code", 0)
+            wait = 90 if code == 429 else max(POLL, 10)   # Forpsi rate-limit → delší pauza
+            print(f"[poll] relay HTTP {code} – čekám {wait}s")
+            time.sleep(wait)
+            continue
         except Exception as e:
             print("[poll] relay nedostupný:", e)
-            time.sleep(max(POLL, 5))
+            time.sleep(max(POLL, 10))
             continue
         if not job:
             time.sleep(POLL)

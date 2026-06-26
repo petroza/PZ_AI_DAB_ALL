@@ -1,5 +1,5 @@
 {
   "base_url": "https://www.appcrate.cloud/ALLDUB/",
   "worker_token": "REPLACE_WITH_YOUR_OWN_RANDOM_TOKEN",
-  "poll_interval_sec": 5
+  "poll_interval_sec": 20
 }

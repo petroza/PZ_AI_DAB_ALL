@@ -40,6 +40,7 @@ class DubJob:
     voice: Optional[str] = None
     audio_mode: str = config.AUDIO_MODE          # replace | voiceover
     burn_subs: bool = False
+    subs_preset: str = "classic"                 # classic | reels | reels_box
     llm_correct: bool = True
 
     status: str = "queued"
