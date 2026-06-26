@@ -524,6 +524,24 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
 (function () { const b = $("server-btn"); if (b) b.addEventListener("click", dabSetServer); })();
+// Náhled hlasu (XTTS) — přehraje krátkou ukázku vybraného vestavěného hlasu.
+(function () {
+  const b = $("voice-play");
+  if (!b) return;
+  let au = null;
+  b.addEventListener("click", () => {
+    const eng = ($("tts_engine") || {}).value;
+    const v = ($("voice").value || "").trim();
+    if (eng !== "xtts") { _setPicked("Náhled hlasu je jen pro XTTS.", true); return; }
+    if (!v) { _setPicked("Vyber konkrétní hlas (prázdné = klon, nelze přehrát).", true); return; }
+    if (au) { try { au.pause(); } catch (_) {} }
+    b.textContent = "⏳";
+    au = new Audio(api("/api/voice_preview?voice=" + encodeURIComponent(v)));
+    au.onended = () => { b.textContent = "🔊"; };
+    au.onerror = () => { b.textContent = "🔊"; _setPicked("Náhled selhal (běží XTTS server?).", true); };
+    au.play().catch(() => { b.textContent = "🔊"; });
+  });
+})();
 $("tts_engine").addEventListener("change", _fillVoiceList);
 $("target_lang").addEventListener("change", () => { $("voice").value = ""; _fillVoiceList(); });
 $("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });

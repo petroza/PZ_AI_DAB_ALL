@@ -145,6 +145,26 @@ def api_voices() -> dict:
             "xtts": get_backend("xtts").list_voices()}
 
 
+@app.get("/api/voice_preview")
+def api_voice_preview(voice: str = "") -> FileResponse:
+    """Krátká ukázka vybraného vestavěného hlasu XTTS (pro poslech ve webu)."""
+    voice = (voice or "").strip()
+    if not voice:
+        raise HTTPException(400, "Chybí jméno hlasu.")
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", voice)[:60]
+    pdir = config.WORK_DIR / "previews"
+    pdir.mkdir(parents=True, exist_ok=True)
+    out = pdir / f"{safe}.wav"
+    if not out.is_file() or out.stat().st_size == 0:
+        try:
+            get_backend("xtts").synth(
+                "Dobrý den, vítejte u zpráv. Toto je ukázka tohoto hlasu.",
+                out, voice=voice, lang="cs-CZ")
+        except Exception as e:
+            raise HTTPException(503, f"Náhled hlasu selhal: {e}")
+    return FileResponse(out, media_type="audio/wav", filename=f"{safe}.wav")
+
+
 @app.post("/api/upload")
 async def api_upload(file: UploadFile = File(...)) -> dict:
     filename = Path(file.filename or "video").name

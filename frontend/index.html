@@ -46,7 +46,10 @@
         </select>
       </label>
       <label>Hlas <span id="voice-hint" class="hint">(volitelné)</span>
-        <input id="voice" type="text" list="voices-list" placeholder="např. cs_CZ-jirka-medium">
+        <span class="voice-row" style="display:flex;gap:6px;align-items:center">
+          <input id="voice" type="text" list="voices-list" placeholder="např. cs_CZ-jirka-medium" style="flex:1">
+          <button id="voice-play" type="button" title="Přehrát ukázku vybraného hlasu (XTTS)" style="flex:0 0 auto;cursor:pointer">🔊</button>
+        </span>
         <datalist id="voices-list"></datalist>
       </label>
     </div>
