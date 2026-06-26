@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -59,13 +59,27 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def _allow_private_network(request, call_next):
-    """Chrome posílá u preflightu z veřejné stránky na lokální IP hlavičku
-    Access-Control-Request-Private-Network: true a vyžaduje souhlas serveru."""
-    response = await call_next(request)
-    if request.method == "OPTIONS":
-        response.headers["Access-Control-Allow-Private-Network"] = "true"
-    return response
+async def _cors_preflight_pna(request, call_next):
+    """Preflight (OPTIONS) z Forpsi na lokální worker zpracujeme SAMI.
+
+    Starlette 1.3 vrací u Private Network Access preflightu (hlavička
+    Access-Control-Request-Private-Network: true) chybně 400 → Chrome pak
+    zablokuje nahrávání a další POST. Tady na povolený origin vrátíme 200 se
+    správnými CORS+PNA hlavičkami; běžné požadavky obslouží CORSMiddleware."""
+    origin = request.headers.get("origin", "")
+    if (request.method == "OPTIONS"
+            and "access-control-request-method" in request.headers
+            and origin in ALLOWED_ORIGINS):
+        req_headers = request.headers.get("access-control-request-headers") or "*"
+        return Response(status_code=200, headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": req_headers,
+            "Access-Control-Allow-Private-Network": "true",
+            "Access-Control-Max-Age": "600",
+            "Vary": "Origin",
+        })
+    return await call_next(request)
 
 
 jobs = JobManager()
