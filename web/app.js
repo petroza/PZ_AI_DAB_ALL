@@ -83,12 +83,26 @@ async function startDub(){
 
 function dlbtn(id,kind,label){return '<a class="dlbtn" href="'+API+'?action=download&id='+id+'&kind='+kind+'">'+label+'</a>';}
 
+let openPlayers={};   // id -> kind (přehrávače otevřené ve frontě, přežijí refresh)
+function playerHtml(id,kind){
+  const tag=kind==="audio"?"audio":"video";
+  return '<'+tag+' controls playsinline preload="metadata" '
+    +'style="width:100%;max-height:70vh;margin-top:8px;border-radius:8px;background:#000" '
+    +'src="'+API+'?action=stream&id='+encodeURIComponent(id)+'&kind='+kind+'"></'+tag+'>';
+}
+
 function jobCard(j){
   const st=STATUS[j.status]||j.status;
   const running=!["done","error"].includes(j.status);
-  let outs="";
+  let outs="", playBox="";
   if(j.status==="done"){
     const o=j.outputs||{};
+    const pk=o.video?"video":(o.audio?"audio":null);
+    if(pk){
+      const open=!!openPlayers[j.id];
+      outs+='<button class="dlbtn" data-play="'+esc(j.id)+'" data-kind="'+pk+'">'+(open?"⏸ Skrýt":"▶ Přehrát")+'</button>';
+      playBox='<div class="player" id="pl-'+esc(j.id)+'">'+(open?playerHtml(j.id,pk):"")+'</div>';
+    }
     if(o.video) outs+=dlbtn(j.id,"video","⬇ Video");
     if(o.audio) outs+=dlbtn(j.id,"audio","⬇ Audio");
     if(o.srt_tgt) outs+=dlbtn(j.id,"srt_tgt","⬇ Titulky");
@@ -103,7 +117,8 @@ function jobCard(j){
     +(j.audio_mode==="voiceover"?" · voice-over":"")+'</div>'
     +'<div class="bar"><div class="fill" style="width:'+j.progress+'%"></div></div>'
     +err+'<div class="jactions">'+outs
-    +'<button class="lnk del" data-del="'+esc(j.id)+'">Smazat</button></div></div>';
+    +'<button class="lnk del" data-del="'+esc(j.id)+'">Smazat</button></div>'
+    +playBox+'</div>';
 }
 
 let lastSig="", timer=null;
@@ -128,7 +143,21 @@ async function delJob(id){
 $("drop").addEventListener("click",()=>$("file").click());
 $("file").addEventListener("change",e=>{const f=e.target.files[0];if(f){picked=f;setPicked("Vybráno: "+f.name+" ("+(f.size/1048576).toFixed(1)+" MB)",false);$("start").disabled=false;}});
 $("start").addEventListener("click",startDub);
-$("jobs").addEventListener("click",e=>{const b=e.target.closest("[data-del]");if(b)delJob(b.getAttribute("data-del"));});
+$("jobs").addEventListener("click",e=>{
+  const del=e.target.closest("[data-del]");
+  if(del){ delJob(del.getAttribute("data-del")); return; }
+  const pl=e.target.closest("[data-play]");
+  if(pl){
+    const id=pl.getAttribute("data-play"), kind=pl.getAttribute("data-kind")||"video";
+    const box=document.getElementById("pl-"+id);
+    if(openPlayers[id]){ delete openPlayers[id]; if(box)box.innerHTML=""; pl.textContent="▶ Přehrát"; }
+    else{
+      openPlayers[id]=kind;
+      if(box){ box.innerHTML=playerHtml(id,kind); const v=box.firstChild; if(v&&v.play)v.play().catch(()=>{}); }
+      pl.textContent="⏸ Skrýt";
+    }
+  }
+});
 $("voice").addEventListener("focus",()=>{const h=$("voice-hint");if(h&&$("tts_engine").value==="xtts")h.textContent="prázdné=klon · Ž: Daisy/Alison/Gracie · M: Damien/Aaron/Baldur";});
 $("burn_subs").addEventListener("change",e=>{$("preset-wrap").classList.toggle("hidden",!e.target.checked);});
 

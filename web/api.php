@@ -100,6 +100,51 @@ case 'delete':
     delete_job_files($j);
     jsend(['ok' => true, 'deleted' => $j['id']]);
 
+// ---------- STREAM (přehrávání ve webu, podpora Range pro přetáčení) -------
+case 'stream':
+    $j = load_job((string)($_GET['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    $kind = (string)($_GET['kind'] ?? 'video');
+    $smap = ['video' => ['mp4', 'video/mp4'], 'audio' => ['mp3', 'audio/mpeg']];
+    if (!isset($smap[$kind])) jsend(['error' => 'Neplatný typ'], 400);
+    [$suffix, $mime] = $smap[$kind];
+    $path = OUT_DIR . '/' . clean_id($j['id']) . '.' . $suffix;
+    if (!is_file($path)) jsend(['error' => 'Výstup neexistuje'], 404);
+    $size = filesize($path);
+    $start = 0; $end = $size - 1;
+    header('Content-Type: ' . $mime);
+    header('Accept-Ranges: bytes');
+    header('Content-Disposition: inline');
+    header('Cache-Control: private, max-age=600');
+    if (isset($_SERVER['HTTP_RANGE'])
+            && preg_match('/bytes=(\d*)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)) {
+        if ($m[1] !== '') $start = (int)$m[1];
+        if ($m[2] !== '') $end = (int)$m[2];
+        if ($end >= $size) $end = $size - 1;
+        if ($start > $end || $start >= $size) {
+            header('HTTP/1.1 416 Range Not Satisfiable');
+            header("Content-Range: bytes */$size");
+            exit;
+        }
+        header('HTTP/1.1 206 Partial Content');
+        header("Content-Range: bytes $start-$end/$size");
+    }
+    $len = $end - $start + 1;
+    header('Content-Length: ' . $len);
+    while (ob_get_level()) ob_end_clean();
+    $fp = fopen($path, 'rb');
+    fseek($fp, $start);
+    $remaining = $len;
+    while ($remaining > 0 && !feof($fp)) {
+        $chunk = fread($fp, min(1 << 18, $remaining));
+        if ($chunk === false) break;
+        echo $chunk;
+        $remaining -= strlen($chunk);
+        flush();
+    }
+    fclose($fp);
+    exit;
+
 // ---------- DOWNLOAD VÝSTUPU ----------------------------------------------
 case 'download':
     $j = load_job((string)($_GET['id'] ?? ''));
