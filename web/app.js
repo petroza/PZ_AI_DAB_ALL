@@ -182,6 +182,18 @@ function edActiveCue(){
   const cues=edSplitCues(seg, edEC, edLines), t=$("ed-video").currentTime||0;
   return cues.find(c=>t>=c.start-0.04 && t<c.end) || cues[0] || null;
 }
+// Ručně zalom cue na PŘESNĚ ≤maxLines řádků (ne přes CSS – to u českých znaků
+// zalamuje dřív a dělalo 3 řádky místo 2). Vrátí text s \n.
+function edWrapLines(text, perLine, maxLines){
+  const words=(text||"").split(/\s+/).filter(Boolean), lines=[]; let cur="";
+  for(const w of words){
+    const cand=cur?cur+" "+w:w;
+    if(cur && cand.length>perLine && lines.length<maxLines-1){ lines.push(cur); cur=w; }
+    else cur=cand;
+  }
+  if(cur) lines.push(cur);
+  return lines.join("\n");
+}
 function edRender(){   // skutečné rozměry zobrazeného videa (kvůli letterboxu)
   const v=$("ed-video");
   const vw=v.videoWidth||16, vh=v.videoHeight||9, cw=v.clientWidth||480, ch=v.clientHeight||270;
@@ -194,10 +206,10 @@ function edFitOverlay(){
   const ov=$("ed-overlay"), R=edRender();
   const fs=Math.max(12, Math.round(R.h*(ED_SIZE[edSize]||0.05)));
   ov.style.fontSize=fs+"px";
-  const fit=Math.max(6, Math.floor(R.w*0.92/(fs*0.6)));
+  const fit=Math.max(6, Math.floor(R.w*0.9/(fs*0.64)));   // konzervativní – řádek se VŽDY vejde
   const ec=edChars>0 ? Math.min(edChars, fit) : fit;
   edEC=ec;                       // efektivní znaků/řádek (pro dělení na cue)
-  ov.style.maxWidth=ec+"ch";
+  ov.style.maxWidth=Math.round(R.w*0.95)+"px";   // ruční \n řídí počet řádků, ne CSS
   const padV=Math.max(0,(R.ch-R.h)/2);          // posuň titulky na obsah videa
   ov.style.bottom=(padV + R.h*0.06)+"px";
   const sh=$("ed-srchint"); if(sh) sh.style.top=(padV + R.h*0.035)+"px";
@@ -244,7 +256,7 @@ function edSync(){
   }
   if(!edEditing){                                  // náhled = aktuální KRÁTKÝ titulek (jako výstup)
     const cue=edActiveCue();
-    ov.textContent=cue?cue.text:"";
+    ov.textContent=cue?edWrapLines(cue.text, edEC, edLines):"";   // ručně na ≤N řádků
   }
   edUpdateLen();
 }
