@@ -156,3 +156,11 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
 .ed-overlay{user-select:none}
 .ed-overlay[contenteditable="true"]{user-select:text;outline:2px dashed var(--voice);
   background:rgba(0,0,0,.30);border-radius:8px;padding:2px 10px;cursor:text}
+
+/* ---- editor video-centric (bez seznamu) ---- */
+#ed-video{max-height:58vh}
+.ed-counter{margin-left:auto;margin-right:12px;font-family:var(--mono);font-size:.76rem;color:var(--dim);white-space:nowrap}
+.ed-srchint{position:absolute;left:5%;right:5%;top:5%;text-align:center;color:rgba(255,255,255,.72);
+  font-size:clamp(11px,2.3vw,15px);font-style:italic;text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none}
+.ed-srchint:empty{display:none}
+.ed-overlay{bottom:9%;font-size:clamp(14px,3.6vw,26px)}

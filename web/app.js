@@ -152,10 +152,13 @@ async function delJob(id){
   await fetch(API,{method:"POST",body:fd}); refresh();
 }
 
-// ---- živý editor titulků na videu (timeline + editace přímo v obraze) ----
+// ---- editor titulků na videu (video-centric, jako ElevenLabs) ----
 let edId=null, edSegs=[], edLast=null, edEditing=false;
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
 function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
+function gotoTime(t){ const v=$("ed-video"); v.pause(); v.currentTime=Math.max(0,t+0.02); edSync(); }
+function edNextIdx(){ const t=$("ed-video").currentTime; for(let i=0;i<edSegs.length;i++) if(edSegs[i].start>t+0.15) return i; return -1; }
+function edPrevIdx(){ const t=$("ed-video").currentTime; for(let i=edSegs.length-1;i>=0;i--) if(edSegs[i].start<t-0.15) return i; return -1; }
 function edTimeline(){
   const v=$("ed-video"), dur=v.duration||0;
   $("ed-time").textContent=fmtTC(v.currentTime)+" / "+fmtTC(dur);
@@ -167,7 +170,7 @@ function edBuildMarkers(){
   edSegs.forEach(s=>{
     const el=document.createElement("div"); el.className="ed-marker";
     el.style.left=(s.start/dur*100)+"%"; el.style.width=Math.max(0.6,(s.end-s.start)/dur*100)+"%";
-    el.addEventListener("click",ev=>{ ev.stopPropagation(); v.currentTime=s.start+0.02; v.pause(); edSync(); });
+    el.addEventListener("click",ev=>{ ev.stopPropagation(); gotoTime(s.start); });
     box.appendChild(el); s.marker=el;
   });
 }
@@ -175,42 +178,33 @@ function edSync(){
   const ov=$("ed-overlay"), cur=edActive();
   edTimeline();
   if(cur!==edLast){
-    edSegs.forEach(s=>{ s.row.classList.toggle("active", s===cur); if(s.marker) s.marker.classList.toggle("active", s===cur); });
-    if(cur) cur.row.scrollIntoView({block:"nearest"});
+    edSegs.forEach(s=>{ if(s.marker) s.marker.classList.toggle("active", s===cur); });
+    const idx=cur?edSegs.indexOf(cur):-1;
+    $("ed-counter").textContent=edSegs.length?((idx>=0?idx+1:"–")+" / "+edSegs.length):"";
+    $("ed-srchint").textContent=cur?(cur.src||""):"";
     edLast=cur;
   }
-  if(!edEditing) ov.textContent=cur?cur.ta.value:"";   // při psaní do obrazu overlay nepřepisuj
+  if(!edEditing) ov.textContent=cur?cur.text:"";   // při psaní do obrazu nepřepisuj
 }
 async function openEditor(id){
   edId=id; edSegs=[]; edLast=null; edEditing=false;
-  const wrap=$("ed-segs"); wrap.innerHTML='<p class="modal-sub">Načítám text…</p>';
   $("ed-status").textContent=""; $("ed-start").disabled=false; $("ed-play").textContent="▶";
-  const ov=$("ed-overlay"); ov.setAttribute("contenteditable","false"); ov.textContent="";
+  const ov=$("ed-overlay"); ov.setAttribute("contenteditable","false"); ov.textContent="Načítám…";
+  $("ed-srchint").textContent=""; $("ed-counter").textContent="";
   $("ed-markers").innerHTML=""; $("ed-playhead").style.left="0%"; $("ed-time").textContent="0:00 / 0:00";
   $("editmodal").classList.remove("hidden");
   const v=$("ed-video"); v.pause();
   let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(id)); }
-  catch{ wrap.innerHTML='<p class="modal-sub">Text se nepodařilo načíst (možná se ještě připravuje).</p>'; return; }
+  catch{ ov.textContent="Text se nepodařilo načíst."; return; }
+  edSegs=(d.segments||[]).map(s=>({start:+s.start, end:+s.end, text:s.text||"", src:s.src||"", marker:null}));
+  ov.textContent="";
   v.src=API+"?action=stream&id="+encodeURIComponent(id)+"&kind=source"; v.load();
-  const segs=d.segments||[];
-  wrap.innerHTML="";
-  segs.forEach(s=>{
-    const row=document.createElement("div"); row.className="ed-seg";
-    row.innerHTML='<div class="ed-tc">'+fmtTC(s.start)+' → '+fmtTC(s.end)+' ▶</div>'
-      +(s.src?'<div class="ed-src">'+esc(s.src)+'</div>':'')
-      +'<textarea rows="2"></textarea>';
-    const ta=row.querySelector("textarea"); ta.value=s.text||"";
-    wrap.appendChild(row);
-    const o={start:+s.start, end:+s.end, ta, row, marker:null};
-    edSegs.push(o);
-    row.querySelector(".ed-tc").addEventListener("click",()=>{ v.currentTime=o.start+0.02; v.pause(); edSync(); });
-    ta.addEventListener("input",()=>{ if(!edEditing && o===edActive()) ov.textContent=ta.value; });
-  });
-  if(!segs.length) wrap.innerHTML='<p class="modal-sub">Žádné segmenty.</p>';
   v.ontimeupdate=edSync; v.onseeked=edSync;
   v.onloadedmetadata=()=>{ edBuildMarkers(); edTimeline(); };
   v.onplay=()=>$("ed-play").textContent="⏸"; v.onpause=()=>$("ed-play").textContent="▶";
   if(v.readyState>=1){ edBuildMarkers(); edTimeline(); }
+  if(edSegs.length) v.currentTime=edSegs[0].start+0.02;
+  edSync();
 }
 function closeEditor(){
   const v=$("ed-video"); v.pause(); v.removeAttribute("src");
@@ -220,7 +214,7 @@ function closeEditor(){
 async function approveEdits(){
   if(!edId) return;
   $("ed-overlay").blur();   // dokonči případnou rozepsanou opravu v obraze
-  const segs=edSegs.map(s=>({start:s.start, end:s.end, text:s.ta.value.trim()}))
+  const segs=edSegs.map(s=>({start:s.start, end:s.end, text:(s.text||"").trim()}))
                    .filter(s=>s.text && s.end>s.start);
   if(!segs.length){ $("ed-status").textContent="Text je prázdný."; return; }
   $("ed-start").disabled=true; $("ed-status").textContent="Spouštím dabing…";
@@ -233,18 +227,20 @@ async function approveEdits(){
     closeEditor(); refresh(); schedule(1500);
   }catch(e){ $("ed-status").textContent="Chyba: "+e.message; $("ed-start").disabled=false; }
 }
-// timeline ovládání
+// ovládání: play/pauza, předchozí/další titulek, klik na timeline
 $("ed-play").addEventListener("click",()=>{ const v=$("ed-video"); if(v.paused) v.play().catch(()=>{}); else v.pause(); });
+$("ed-prev").addEventListener("click",()=>{ const i=edPrevIdx(); if(i>=0) gotoTime(edSegs[i].start); });
+$("ed-next").addEventListener("click",()=>{ const i=edNextIdx(); if(i>=0) gotoTime(edSegs[i].start); });
 $("ed-track").addEventListener("click",e=>{
   const v=$("ed-video"), dur=v.duration||0; if(dur<=0) return;
   const r=$("ed-track").getBoundingClientRect();
-  v.currentTime=Math.max(0,Math.min(dur,(e.clientX-r.left)/r.width*dur)); v.pause(); edSync();
+  gotoTime((e.clientX-r.left)/r.width*dur);
 });
-// editace PŘÍMO v obraze (klikni na titulek a piš)
+// editace PŘÍMO v obraze (klikni na titulek na videu a piš)
 const _ov=$("ed-overlay");
 _ov.addEventListener("click",()=>{ if(_ov.getAttribute("contenteditable")!=="true" && edActive()){ $("ed-video").pause(); _ov.setAttribute("contenteditable","true"); _ov.focus(); }});
 _ov.addEventListener("focus",()=>{ edEditing=true; $("ed-video").pause(); });
-_ov.addEventListener("input",()=>{ const s=edActive(); if(s) s.ta.value=_ov.textContent; });
+_ov.addEventListener("input",()=>{ const s=edActive(); if(s) s.text=_ov.textContent; });
 _ov.addEventListener("blur",()=>{ edEditing=false; _ov.setAttribute("contenteditable","false"); });
 _ov.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); _ov.blur(); }});
 $("ed-close").addEventListener("click",closeEditor);
