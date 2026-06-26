@@ -32,13 +32,14 @@ config.ensure_dirs()
 app = FastAPI(title="PZ AI DAB ALL", version="1.0.0")
 
 # --- CORS + Private Network Access ---------------------------------------
-# Worker běží lokálně (127.0.0.1:8790), ale frontend může být servírovaný
-# z Forpsi (https://www.appcreate.cloud/ALLDUB). Aby prohlížeč pustil volání
-# z HTTPS stránky na lokální worker, musí worker:
-#   1) vracet CORS hlavičky pro povolené originy (appcreate.cloud),
+# Worker běží lokálně (127.0.0.1:8790), ale frontend je servírovaný z Forpsi
+# (https://www.appcrate.cloud/ALLDUB). Aby prohlížeč pustil volání z HTTPS
+# stránky na lokální worker, musí worker:
+#   1) vracet CORS hlavičky pro povolené originy (appcrate.cloud – BEZ „e"!),
 #   2) odpovědět na PNA preflight hlavičkou Access-Control-Allow-Private-Network.
 # Originy lze přepsat přes DAB_CORS_ORIGINS (čárkou oddělený seznam).
 _DEFAULT_ORIGINS = (
+    "https://www.appcrate.cloud,https://appcrate.cloud,"
     "https://www.appcreate.cloud,https://appcreate.cloud,"
     "http://127.0.0.1:8790,http://localhost:8790"
 )
