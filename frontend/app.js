@@ -12,8 +12,13 @@ function _defaultApiBase() {
     if (saved !== null) return saved.replace(/\/+$/, "");
   } catch (_) {}
   const h = location.hostname;
-  if (h === "127.0.0.1" || h === "localhost" || h === "") return "";
-  return "http://127.0.0.1:8790";
+  // Stránka z Forpsi (appcrate.cloud) → volej lokální worker na PC (127.0.0.1).
+  // Jinak worker servíruje vlastní frontend (localhost, 127.0.0.1 NEBO LAN IP
+  // typu 10.0.1.x při přístupu z mobilu) → stejný origin = volej sám sebe.
+  if (h.endsWith("appcrate.cloud") || h.endsWith("appcreate.cloud")) {
+    return "http://127.0.0.1:8790";
+  }
+  return "";
 }
 let API_BASE = _defaultApiBase();
 const api = (p) => API_BASE + p;
