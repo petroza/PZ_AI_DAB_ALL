@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv_xtts/
 work/
 
 # Binárky, modely a hlasy (stahují se zvlášť — viz README)
@@ -20,3 +21,6 @@ models/*
 tools/*
 voices/*
 !**/.gitkeep
+# zdrojové skripty v tools/ (ne binárky) – ty chceme verzovat
+!tools/xtts_server.py
+!tools/dabtest.sh

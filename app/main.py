@@ -6,6 +6,7 @@ Spuštění (z kořene projektu):
 """
 from __future__ import annotations
 
+import os
 import platform
 import re
 import shutil
@@ -15,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -28,6 +30,43 @@ from .job_manager import JobManager
 config.ensure_dirs()
 
 app = FastAPI(title="PZ AI DAB ALL", version="1.0.0")
+
+# --- CORS + Private Network Access ---------------------------------------
+# Worker běží lokálně (127.0.0.1:8790), ale frontend může být servírovaný
+# z Forpsi (https://www.appcreate.cloud/ALLDUB). Aby prohlížeč pustil volání
+# z HTTPS stránky na lokální worker, musí worker:
+#   1) vracet CORS hlavičky pro povolené originy (appcreate.cloud),
+#   2) odpovědět na PNA preflight hlavičkou Access-Control-Allow-Private-Network.
+# Originy lze přepsat přes DAB_CORS_ORIGINS (čárkou oddělený seznam).
+_DEFAULT_ORIGINS = (
+    "https://www.appcreate.cloud,https://appcreate.cloud,"
+    "http://127.0.0.1:8790,http://localhost:8790"
+)
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("DAB_CORS_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=600,
+)
+
+
+@app.middleware("http")
+async def _allow_private_network(request, call_next):
+    """Chrome posílá u preflightu z veřejné stránky na lokální IP hlavičku
+    Access-Control-Request-Private-Network: true a vyžaduje souhlas serveru."""
+    response = await call_next(request)
+    if request.method == "OPTIONS":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+
 jobs = JobManager()
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{12}$")
@@ -102,7 +141,8 @@ def api_status() -> dict:
 @app.get("/api/voices")
 def api_voices() -> dict:
     return {"piper": get_backend("piper").list_voices(),
-            "voicestudio": get_backend("voicestudio").list_voices()}
+            "voicestudio": get_backend("voicestudio").list_voices(),
+            "xtts": get_backend("xtts").list_voices()}
 
 
 @app.post("/api/upload")

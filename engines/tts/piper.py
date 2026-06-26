@@ -112,7 +112,18 @@ def _synth_pip(text: str, out_wav: Path, model: Path,
     pv = _piper_cache[cache_key]
     length_scale = (1.0 / speed) if speed and speed > 0 else 1.0
     with wave.open(str(out_wav), "wb") as wf:
-        pv.synthesize(text, wf, length_scale=length_scale)
+        if hasattr(pv, "synthesize_wav"):
+            # Nové API (piper-tts >= 1.3): synthesize_wav si nastaví wav formát sám,
+            # length_scale se předává přes SynthesisConfig.
+            try:
+                from piper import SynthesisConfig
+                syn = SynthesisConfig(length_scale=length_scale)
+            except Exception:
+                syn = None
+            pv.synthesize_wav(text, wf, syn_config=syn)
+        else:
+            # Staré API (piper-tts <= 1.2): wav formát nastaví synthesize().
+            pv.synthesize(text, wf, length_scale=length_scale)
 
 
 class PiperBackend(TTSBackend):

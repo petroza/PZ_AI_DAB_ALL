@@ -150,13 +150,38 @@ rozhraní, mění se to v `engines/asr/` (jeden zdroj pravdy).
 
 ---
 
-## Volba hlasu: Piper vs PZ Voice Studio
+## Volba hlasu: Piper vs XTTS vs PZ Voice Studio
 
 - **Piper** (výchozí) — rychlý, plně offline, CPU, pevné hlasy. Český hlas
-  `cs_CZ-jirka`. Drží slib „bez cloudu, na CPU".
+  `cs_CZ-jirka`. Drží slib „bez cloudu, na CPU". Robotičtější.
+- **XTTS** (doporučeno pro kvalitu) — neuronový hlas, **klonuje původního
+  mluvčího** z videa, přirozená čeština. Běží lokálně na **GPU**. Zapni
+  `START_XTTS.bat` a v UI zvol engine „XTTS". Viz níže.
 - **PZ Voice Studio** — připoj běžící Studio a využij **Chatterbox**
-  (vyšší kvalita, **klonování hlasu** původního mluvčího, multilingual vč.
-  češtiny a ruštiny). Ideálně s GPU.
+  (klonování, multilingual). Ideálně s GPU.
+
+### XTTS — kvalitní český hlas (GPU)
+
+Oddělené prostředí `.venv_xtts` (ať netáhne torch do hlavního workeru):
+
+```
+python -m venv .venv_xtts
+.venv_xtts\Scripts\python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+.venv_xtts\Scripts\python -m pip install coqui-tts "transformers==4.57.1"
+```
+
+Spuštění: **`START_XTTS.bat`** (server na :7868, první start stáhne model ~1,8 GB).
+Pak v dabingu zvol engine **XTTS**. Nejjednodušší: **`START_ALL.bat`** spustí
+worker i XTTS server najednou.
+
+Pipeline kvůli kvalitě: klonuje hlas z 24 kHz reference originálu, nechá XTTS
+mluvit nativně rychleji + dorovná **rubberbandem** (ne atempo), **kondenzuje
+překlad** na časový rozpočet, **slučuje krátké segmenty** a **rozepisuje čísla**
+(„8 000" → „osm tisíc"). Cizí značky čte foneticky podle `tts_phonetics.txt`
+(Porsche → Porše, Enyaq → Enjak; rozšiřitelné).
+
+> XTTS dabing nejvíc vynikne na **cizojazyčných** videích (en/ru → čeština).
+> U velmi rychlého českého hlasatelského VO zůstává nejčistší originál + titulky.
 
 ---
 

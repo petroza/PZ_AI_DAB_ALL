@@ -389,19 +389,32 @@ def _argos_translate(text: str, src_locale: str, tgt_locale: str) -> str:
 
 
 def llm_translate(text: str, target: str, log: LogFn = None,
-                  source: str = "auto") -> str:
+                  source: str = "auto", max_chars: int = 0) -> str:
     """Přeloží titulkový řádek do cílového jazyka.
 
     Pořadí: 1) Ollama (online lokální LLM), 2) argostranslate (offline).
-    Bezpečný fallback: při chybě vrátí původní text."""
+    Bezpečný fallback: při chybě vrátí původní text.
+
+    max_chars > 0: dabingový režim – překlad musí jít vyslovit za daný čas,
+    proto se LLM instruuje, ať je stručný a vejde se do ~max_chars znaků
+    (zabraňuje přecpání řeči, když je čeština delší než slot originálu)."""
     text = (text or "").strip()
     if not text:
         return text
     tname = _TRANSLATE_NAMES.get(target, target)
+    # Kondenzaci řeš jen když je text reálně delší než rozpočet (jinak nech být).
+    fit = ""
+    if max_chars and max_chars > 0 and len(text) > max_chars:
+        fit = (f" DŮLEŽITÉ: překlad se musí dát přirozeně vyslovit za stejnou dobu "
+               f"jako originál, proto buď stručný a vejdi se do {max_chars} znaků – "
+               f"klidně zkrať a zjednoduš formulaci, ale zachovej hlavní sdělení.")
     try:
         import requests
-        prompt = (f"Přelož následující titulek do {tname}. Zachovej smysl i styl, "
-                  f"vrať POUZE překlad – žádný komentář, žádné uvozovky.\n\n{text}")
+        prompt = (f"Přelož následující titulek do {tname}.{fit} Text je pro "
+                  f"DABING (čte ho hlas), proto nepoužívej zkratky ani symboly – "
+                  f"vše vypiš slovy (např. místo „vs.“ napiš „oproti“). Zachovej "
+                  f"smysl{'' if fit else ' i styl'}, vrať POUZE překlad – žádný "
+                  f"komentář, žádné uvozovky.\n\n{text}")
         r = requests.post(
             config.OLLAMA_URL,
             json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False,

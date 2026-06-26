@@ -11,6 +11,7 @@
 <header class="top">
   <div class="brand"><span class="logo">🎙️</span> PZ&nbsp;AI&nbsp;<b>DAB&nbsp;ALL</b></div>
   <div class="top-right">
+    <button id="server-btn" class="theme-btn" title="Adresa workeru (běží na tvém PC)">🖥️</button>
     <button id="theme-btn" class="theme-btn" title="Přepnout světlý/tmavý režim">🌙</button>
     <div id="status" class="status">Zjišťuji stav…</div>
   </div>
@@ -40,6 +41,7 @@
       <label>Hlasový engine
         <select id="tts_engine">
           <option value="piper">Piper — lokální, offline (výchozí)</option>
+          <option value="xtts">XTTS — kvalitní, klonuje původní hlas (GPU)</option>
           <option value="voicestudio">PZ Voice Studio — Chatterbox / klonování</option>
         </select>
       </label>

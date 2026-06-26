@@ -1,5 +1,37 @@
 "use strict";
 
+// --- API base -------------------------------------------------------------
+// Worker (Python/FastAPI) běží lokálně na 127.0.0.1:8790. Frontend může být
+// servírovaný buď přímo workerem (lokálně) NEBO z Forpsi (appcreate.cloud).
+//  • lokálně  → stejný origin (API_BASE = "")
+//  • Forpsi   → volá lokální worker (http://127.0.0.1:8790)
+// Adresu lze ručně přepsat (uloží se do localStorage) přes tlačítko 🖥️.
+function _defaultApiBase() {
+  try {
+    const saved = localStorage.getItem("dab_api_base");
+    if (saved !== null) return saved.replace(/\/+$/, "");
+  } catch (_) {}
+  const h = location.hostname;
+  if (h === "127.0.0.1" || h === "localhost" || h === "") return "";
+  return "http://127.0.0.1:8790";
+}
+let API_BASE = _defaultApiBase();
+const api = (p) => API_BASE + p;
+function setApiBase(url) {
+  API_BASE = (url || "").replace(/\/+$/, "");
+  try { localStorage.setItem("dab_api_base", API_BASE); } catch (_) {}
+}
+function dabSetServer() {
+  const cur = API_BASE || location.origin;
+  const val = prompt(
+    "Adresa workeru PZ AI DAB ALL (běží u tebe na PC).\n" +
+    "Prázdné = stejný server jako tahle stránka.",
+    cur || "http://127.0.0.1:8790");
+  if (val === null) return;
+  setApiBase(val.trim());
+  loadStatus(); loadVoices(); refresh();
+}
+
 function escHtml(s) {
   return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
@@ -38,8 +70,12 @@ function fillSelect(sel, codes, def) {
 
 async function loadStatus() {
   let s;
-  try { s = await jget("/api/status"); }
-  catch { $("status").textContent = "Backend neodpovídá."; return; }
+  try { s = await jget(api("/api/status")); }
+  catch {
+    $("status").innerHTML = '<span class="bad">Worker neodpovídá</span>'
+      + ' · spusť START.bat na PC' + (API_BASE ? ' (' + escHtml(API_BASE) + ')' : '');
+    return;
+  }
   fillSelect($("source_lang"), s.source_languages, s.defaults.source);
   fillSelect($("target_lang"), s.target_languages, s.defaults.target);
 
@@ -71,7 +107,7 @@ let _voicesCache = null;
 
 async function loadVoices() {
   try {
-    _voicesCache = await jget("/api/voices");
+    _voicesCache = await jget(api("/api/voices"));
   } catch (_) { return; }
   _fillVoiceList();
 }
@@ -82,6 +118,7 @@ function _fillVoiceList() {
   dl.innerHTML = "";
   const engine = ($("tts_engine") || {}).value || "piper";
   const src = engine === "piper" ? (_voicesCache.piper || [])
+            : engine === "xtts" ? (_voicesCache.xtts || [])
             : engine.includes("voicestudio") || engine === "voicestudio"
               ? (_voicesCache.voicestudio || [])
             : [...(_voicesCache.piper || []), ...(_voicesCache.voicestudio || [])];
@@ -90,8 +127,15 @@ function _fillVoiceList() {
     if (!id || id === "[object Object]") return;
     const o = document.createElement("option"); o.value = id; dl.appendChild(o);
   });
-  // auto-suggest default voice for target language if voice field is empty
   const voiceIn = $("voice");
+  if (voiceIn) {
+    voiceIn.placeholder = engine === "xtts"
+      ? "prázdné = klonovat původní hlas · nebo vyber hlas"
+      : "např. cs_CZ-jirka-medium";
+  }
+  // U XTTS nech prázdné (= klonovat originál); u Piperu napověz hlas jazyka.
+  if (engine === "xtts") return;
+  // auto-suggest default voice for target language if voice field is empty
   if (voiceIn && !voiceIn.value.trim()) {
     const tgt = ($("target_lang") || {}).value || "";
     const prefix = tgt.replace("-", "_");   // cs-CZ -> cs_CZ
@@ -112,7 +156,7 @@ async function uploadFile(file) {
   _setPicked("Nahrávám: " + file.name + " …", false);
   const fd = new FormData(); fd.append("file", file);
   try {
-    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const r = await fetch(api("/api/upload"), { method: "POST", body: fd });
     if (!r.ok) {
       _setPicked("Chyba: " + (await r.text()), true);
       $("file").value = "";
@@ -141,7 +185,7 @@ async function startDub() {
     llm_correct: $("llm_correct").checked,
   };
   try {
-    const res = await fetch("/api/dub/" + currentJob, {
+    const res = await fetch(api("/api/dub/" + currentJob), {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -159,7 +203,7 @@ async function startDub() {
 }
 
 function dl(id, kind, label) {
-  return `<a class="dlbtn" href="/api/download/${id}/${kind}">${label}</a>`;
+  return `<a class="dlbtn" href="${api('/api/download/' + id + '/' + kind)}">${label}</a>`;
 }
 
 // --- After Effects export -------------------------------------------------
@@ -307,7 +351,7 @@ async function _aeDownload() {
   const btn = $("ae-dl");
   btn.disabled = true; btn.textContent = "Načítám titulky…";
   try {
-    const r = await fetch("/api/download/" + _aeJobId + "/json");
+    const r = await fetch(api("/api/download/" + _aeJobId + "/json"));
     if (!r.ok) throw new Error("JSON nedostupný");
     const data = await r.json();
     const segs = data.segments || [];
@@ -375,7 +419,7 @@ let _refreshTimer = null;
 
 async function refresh() {
   let data;
-  try { data = await jget("/api/jobs"); } catch { return false; }
+  try { data = await jget(api("/api/jobs")); } catch { return false; }
   const sig = JSON.stringify(data.jobs.map(j => [j.id, j.status, j.progress, j.error, j.duration, j.segments_count]));
   const hasRunning = data.jobs.some(j => !["done", "error"].includes(j.status));
   if (!hasRunning && sig === _lastJobsJson) return false;
@@ -402,7 +446,7 @@ function _logStop() {
 
 async function _logFetch(id) {
   try {
-    const r = await fetch("/api/jobs/" + id + "/log");
+    const r = await fetch(api("/api/jobs/" + id + "/log"));
     if (!r.ok) return;
     const txt = await r.text();
     const el = $("logtext");
@@ -414,7 +458,7 @@ async function _logFetch(id) {
 
 async function _logCheckRunning(id) {
   try {
-    const j = await jget("/api/jobs/" + id);
+    const j = await jget(api("/api/jobs/" + id));
     if (["done", "error"].includes(j.status)) {
       _logStop();
       $("logtitle").textContent = $("logtitle").textContent.replace(" ⟳", "");
@@ -431,7 +475,7 @@ async function showLog(id, name) {
   await _logFetch(id);
   // auto-refresh pokud job stále běží
   try {
-    const j = await jget("/api/jobs/" + id);
+    const j = await jget(api("/api/jobs/" + id));
     if (!["done", "error"].includes(j.status)) {
       $("logtitle").textContent = "Log · " + name + " ⟳";
       _logInterval = setInterval(async () => {
@@ -445,7 +489,7 @@ async function showLog(id, name) {
 async function delJob(id) {
   if (!confirm("Opravdu smazat tuto zakázku?")) return;
   try {
-    const r = await fetch("/api/jobs/" + id, { method: "DELETE" });
+    const r = await fetch(api("/api/jobs/" + id), { method: "DELETE" });
     if (!r.ok) { alert("Smazání selhalo (" + r.status + ")."); return; }
   } catch (e) { alert("Chyba spojení: " + e); return; }
   refresh();
@@ -473,6 +517,7 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 }));
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
+(function () { const b = $("server-btn"); if (b) b.addEventListener("click", dabSetServer); })();
 $("tts_engine").addEventListener("change", _fillVoiceList);
 $("target_lang").addEventListener("change", () => { $("voice").value = ""; _fillVoiceList(); });
 $("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });

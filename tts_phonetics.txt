@@ -1,0 +1,19 @@
+# Fonetický přepis cizích slov/značek POUZE pro hlas (XTTS).
+# Titulky zůstávají správně – přepisuje se jen text posílaný do syntézy.
+# Formát:  Originál = Jak_se_to_má_přečíst   (velikost písmen nehraje roli)
+# Řádky začínající # jsou komentáře.
+#
+# Vestavěné jsou už: Porsche, Enyaq, Volkswagen, Peugeot, Renault, Citroen,
+# Chevrolet, Hyundai, Nissan, iPhone, Google, YouTube. Tady přidej další.
+
+Porsche = Porše
+Enyaq = Enjak
+Volkswagen = Folksvágn
+Peugeot = Pežo
+Renault = Reno
+Citroen = Sitroen
+Chevrolet = Ševrolet
+Hyundai = Hjundaj
+Mercedes = Mercedes
+BMW = bé em vé
+SUV = es jů ví
