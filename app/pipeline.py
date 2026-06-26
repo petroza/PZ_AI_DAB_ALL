@@ -234,8 +234,9 @@ def _prepare(jobs, job_id, work, upload, target, log, prog):
         # překlad dost krátký, aby se řeč nemusela drtit časem.
         budget = int((end - start) * 14) if (end - start) > 0 else 0
         if txt and not same_lang:
-            tr = asr_engine.llm_translate(txt, target, log,
-                                          source=effective_src, max_chars=budget)
+            tr = asr_engine.translate_text(txt, target, log, source=effective_src,
+                                           max_chars=budget,
+                                           translator=getattr(job, "translator", "local"))
         else:
             tr = txt
         if tr and job.llm_correct:

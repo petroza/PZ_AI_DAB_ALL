@@ -34,6 +34,14 @@
     <div class="grid">
       <label>Zdrojový jazyk <select id="source_lang"></select></label>
       <label>Cílový jazyk <select id="target_lang"></select></label>
+      <label>Překladač
+        <select id="translator">
+          <option value="local">Lokální gemma4 (offline, výchozí)</option>
+          <option value="gemma31b">gemma4:31b (offline, kvalitnější)</option>
+          <option value="google">Google Translate (online, zdarma)</option>
+          <option value="deepl">DeepL (online, potřebuje klíč)</option>
+        </select>
+      </label>
       <label>Hlasový engine
         <select id="tts_engine">
           <option value="piper">Piper — offline (výchozí)</option>
@@ -138,6 +146,6 @@
   </div>
 </div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

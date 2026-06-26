@@ -40,6 +40,10 @@ TOKEN = os.environ.get("DAB_RELAY_TOKEN") or CFG["worker_token"]
 POLL = float(CFG.get("poll_interval_sec", 5))
 HEAD = {"X-Worker-Token": TOKEN}
 
+# DeepL API klíč (volitelný) z worker_config.json → env, ať ho vidí překladač.
+if CFG.get("deepl_key") and not os.environ.get("DEEPL_API_KEY"):
+    os.environ["DEEPL_API_KEY"] = str(CFG["deepl_key"])
+
 jobs = JobManager()
 
 
@@ -149,6 +153,7 @@ def _make_local_job(job, src):
         "voice": (job.get("voice") or None),
         "audio_mode": job.get("audio_mode") or "replace",
         "subs_preset": job.get("subs_preset") or "classic",
+        "translator": job.get("translator") or "local",
         "subs_chars": int(job.get("subs_chars") or 0),
         "subs_maxlines": int(job.get("subs_maxlines") or 2),
         "subs_size": str(job.get("subs_size") or ""),

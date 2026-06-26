@@ -407,7 +407,8 @@ def _seems_untranslated(out: str, src: str, target: str) -> bool:
 
 
 def llm_translate(text: str, target: str, log: LogFn = None,
-                  source: str = "auto", max_chars: int = 0) -> str:
+                  source: str = "auto", max_chars: int = 0,
+                  model: Optional[str] = None) -> str:
     """Přeloží titulkový řádek do cílového jazyka.
 
     Pořadí: 1) Ollama (online lokální LLM), 2) argostranslate (offline).
@@ -447,7 +448,7 @@ def llm_translate(text: str, target: str, log: LogFn = None,
             import requests
             r = requests.post(
                 config.OLLAMA_URL,
-                json={"model": config.OLLAMA_MODEL,
+                json={"model": (model or config.OLLAMA_MODEL),
                       "prompt": force_prompt if forceful else base_prompt,
                       "stream": False, "keep_alive": "30m",
                       "options": {"temperature": 0.5 if forceful else 0.1,
@@ -472,6 +473,83 @@ def llm_translate(text: str, target: str, log: LogFn = None,
     return _argos_translate(text, source, target)
 
 
+def _lang2(code: str) -> str:
+    """„en-US" → „en", „cs-CZ" → „cs", „auto" → „auto"."""
+    return (code or "auto").split("-")[0].lower()
+
+
+def _google_translate(text: str, source: str, target: str, log: LogFn = None) -> Optional[str]:
+    """Google Translate přes veřejný (neoficiální) endpoint – zdarma, bez klíče.
+    Vrátí překlad nebo None při chybě (pak se použije fallback)."""
+    import requests
+    sl, tl = _lang2(source) or "auto", _lang2(target)
+    for attempt in range(3):
+        try:
+            r = requests.get(
+                "https://translate.googleapis.com/translate_a/single",
+                params={"client": "gtx", "sl": sl, "tl": tl, "dt": "t", "q": text},
+                timeout=15,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            r.raise_for_status()
+            data = r.json()
+            out = "".join(seg[0] for seg in (data[0] or []) if seg and seg[0]).strip()
+            if out:
+                return out
+        except Exception as e:
+            if attempt == 2:
+                _log(log, f"Google překlad selhal ({e}).")
+            else:
+                import time as _t; _t.sleep(1.0 * (attempt + 1))
+    return None
+
+
+def _deepl_translate(text: str, source: str, target: str, log: LogFn = None) -> Optional[str]:
+    """DeepL API (free/pro). Klíč z env DEEPL_API_KEY. Vrátí překlad nebo None."""
+    import os
+    key = os.environ.get("DEEPL_API_KEY", "").strip()
+    if not key:
+        _log(log, "DeepL: chybí API klíč (DEEPL_API_KEY) → použiji lokální překlad.")
+        return None
+    import requests
+    # free klíče končí na ":fx" → free endpoint, jinak placený
+    base = "https://api-free.deepl.com" if key.endswith(":fx") else "https://api.deepl.com"
+    payload = {"text": text, "target_lang": _lang2(target).upper()}
+    sl = _lang2(source)
+    if sl and sl != "auto":
+        payload["source_lang"] = sl.upper()
+    try:
+        r = requests.post(base + "/v2/translate",
+                          data=payload, headers={"Authorization": "DeepL-Auth-Key " + key},
+                          timeout=20)
+        r.raise_for_status()
+        out = (r.json().get("translations") or [{}])[0].get("text", "").strip()
+        return out or None
+    except Exception as e:
+        _log(log, f"DeepL překlad selhal ({e}) → lokální překlad.")
+        return None
+
+
+def translate_text(text: str, target: str, log: LogFn = None, source: str = "auto",
+                   max_chars: int = 0, translator: str = "local") -> str:
+    """Rozcestník překladu podle volby uživatele. Online enginy mají při selhání
+    fallback na lokální Ollamu, ať dabing nikdy nespadne."""
+    text = (text or "").strip()
+    if not text:
+        return text
+    tr = (translator or "local").lower()
+    if tr == "google":
+        out = _google_translate(text, source, target, log)
+        if out and not _seems_untranslated(out, text, target):
+            return out
+    elif tr == "deepl":
+        out = _deepl_translate(text, source, target, log)
+        if out and not _seems_untranslated(out, text, target):
+            return out
+    model = "gemma4:31b" if tr in ("gemma31b", "gemma4:31b") else None
+    return llm_translate(text, target, log, source, max_chars, model=model)
+
+
 def _llm_correct_chunk(text: str, lang: Optional[str] = None) -> str:
     """Jeden blok textu -> Ollama. Vždy bezpečný fallback na původní text."""
     text = (text or "").strip()
@@ -485,7 +563,7 @@ def _llm_correct_chunk(text: str, lang: Optional[str] = None) -> str:
     try:
         r = requests.post(
             config.OLLAMA_URL,
-            json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False,
+            json={"model": (model or config.OLLAMA_MODEL), "prompt": prompt, "stream": False,
                   "keep_alive": "10m",  # nech model nahřátý mezi segmenty/joby
                   "options": {"temperature": 0, "num_predict": 1024}},
             timeout=config.LLM_TIMEOUT,

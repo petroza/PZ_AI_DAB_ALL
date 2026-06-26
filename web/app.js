@@ -46,6 +46,7 @@ async function startDub(){
     filename:f.name,
     source_lang:$("source_lang").value, target_lang:$("target_lang").value,
     tts_engine:$("tts_engine").value, voice:$("voice").value.trim(),
+    translator:$("translator").value,
     audio_mode:document.querySelector('input[name=audio_mode]:checked').value,
     burn_subs:$("burn_subs").checked?"1":"0",
     subs_preset:$("subs_preset").value,

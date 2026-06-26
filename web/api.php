@@ -39,13 +39,15 @@ case 'upload_init':
     $preset = (string)($_POST['subs_preset'] ?? 'classic');
     if (!in_array($preset, ['classic','reels','reels_box','word','karaoke','karaoke_green','karaoke_box'], true))
         $preset = 'classic';
+    $trans = (string)($_POST['translator'] ?? 'local');
+    if (!in_array($trans, ['local','gemma31b','google','deepl'], true)) $trans = 'local';
     $id = new_id();
     @file_put_contents(UP_DIR . '/' . $id . '.part', '');
     $job = [
         'id' => $id, 'filename' => basename($orig), 'ext' => $ext,
         'source_lang' => $sl, 'target_lang' => $tl, 'tts_engine' => $eng,
         'voice' => trim((string)($_POST['voice'] ?? '')),
-        'audio_mode' => $am, 'subs_preset' => $preset,
+        'audio_mode' => $am, 'subs_preset' => $preset, 'translator' => $trans,
         'subs_chars' => 0, 'subs_maxlines' => 2, 'subs_size' => '',
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
         'review_text' => ((string)($_POST['review_text'] ?? '0')) === '1',

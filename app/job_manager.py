@@ -44,6 +44,7 @@ class DubJob:
     subs_chars: int = 0                          # max znaků/řádek (0 = auto dle šířky videa)
     subs_maxlines: int = 2                       # 1 nebo 2 řádky
     subs_size: str = ""                          # velikost: ""=auto | small|medium|large|xl
+    translator: str = "local"                    # local | gemma31b | google | deepl
     llm_correct: bool = True
 
     status: str = "queued"
