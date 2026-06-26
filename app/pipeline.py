@@ -93,7 +93,7 @@ def _wrap_two_lines(text: str, max_line: int = 42) -> str:
 
 
 def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
-                   min_dur: float = 1.0) -> list:
+                   min_dur: float = 1.0, wrap_chars: int = 42) -> list:
     """Rozdělí (sloučené) bloky na čitelné titulky (≤2 řádky) s proporčním časem.
 
     Po sloučení segmentů pro dabing jsou bloky dlouhé; titulky chtějí krátké
@@ -137,7 +137,7 @@ def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
             local[-2][2] = (local[-2][2] + " " + local[-1][2]).strip()
             local.pop()
         for st_, en_, tx in local:
-            cues.append({"start": st_, "end": en_, "text": _wrap_two_lines(tx)})
+            cues.append({"start": st_, "end": en_, "text": _wrap_two_lines(tx, wrap_chars)})
     return cues
 
 
@@ -419,10 +419,14 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
                 # 9:16). Spočítej kolik znaků se vejde na řádek a podle toho
                 # zkrať cue (re-split) i zalomení — platí pro VŠECHNY presety.
                 if vw and vw > 0:
-                    fit = max(10, int(vw / (bopts["size"] * 0.58)))
+                    # ~0.62·velikost = bezpečná šířka znaku (Arial bold + rezerva),
+                    # ×0.92 okraje → řádek se VŽDY vejde, nepřeteče do stran.
+                    fit = max(8, int(vw * 0.92 / (bopts["size"] * 0.62)))
                     bopts["chars"] = min(bopts.get("chars", 42), fit)
-                cue_max = max(16, bopts["chars"] * 2 - 4)   # 2 řádky dané šířky
-                short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0)
+                cue_max = max(14, bopts["chars"] * 2 - 4)   # 2 řádky dané šířky
+                # wrap_chars = stejná šířka → zalomení sedí na úzké video (9:16)
+                short = _subtitle_cues(out_segs, max_chars=cue_max, max_dur=4.0,
+                                       wrap_chars=bopts["chars"])
                 burn_srt = work / "burn.srt"
                 exporters.write_srt({"segments": short or out_segs}, burn_srt)
                 log(f"Zapékání titulků: preset={preset} (video {vw}×{vh}, "

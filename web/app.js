@@ -152,32 +152,54 @@ async function delJob(id){
   await fetch(API,{method:"POST",body:fd}); refresh();
 }
 
-// ---- editor textu před dabingem ----
-let edId=null;
+// ---- živý editor titulků na videu ----
+let edId=null, edSegs=[], edLast=null;
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
+function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
+function edSync(){
+  const ov=$("ed-overlay"), cur=edActive();
+  if(cur!==edLast){
+    edSegs.forEach(s=>s.row.classList.toggle("active", s===cur));
+    if(cur) cur.row.scrollIntoView({block:"nearest"});
+    edLast=cur;
+  }
+  ov.textContent=cur?cur.ta.value:"";   // živý náhled (i s rozepsanou opravou)
+}
 async function openEditor(id){
-  edId=id;
+  edId=id; edSegs=[]; edLast=null;
   const wrap=$("ed-segs"); wrap.innerHTML='<p class="modal-sub">Načítám text…</p>';
   $("ed-status").textContent=""; $("ed-start").disabled=false;
   $("editmodal").classList.remove("hidden");
+  const v=$("ed-video"); v.pause(); $("ed-overlay").textContent="";
   let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(id)); }
   catch{ wrap.innerHTML='<p class="modal-sub">Text se nepodařilo načíst (možná se ještě připravuje).</p>'; return; }
+  v.src=API+"?action=stream&id="+encodeURIComponent(id)+"&kind=source"; v.load();
   const segs=d.segments||[];
-  wrap.innerHTML=segs.length?segs.map(s=>{
-    const tc=fmtTC(s.start)+" → "+fmtTC(s.end);
-    const src=s.src?'<div class="ed-src">'+esc(s.src)+'</div>':"";
-    return '<div class="ed-seg" data-start="'+s.start+'" data-end="'+s.end+'">'
-      +'<div class="ed-tc">'+tc+'</div>'+src
-      +'<textarea rows="2">'+esc(s.text||"")+'</textarea></div>';
-  }).join(""):'<p class="modal-sub">Žádné segmenty.</p>';
+  wrap.innerHTML="";
+  segs.forEach(s=>{
+    const row=document.createElement("div"); row.className="ed-seg";
+    row.innerHTML='<div class="ed-tc">'+fmtTC(s.start)+' → '+fmtTC(s.end)+' ▶</div>'
+      +(s.src?'<div class="ed-src">'+esc(s.src)+'</div>':'')
+      +'<textarea rows="2"></textarea>';
+    const ta=row.querySelector("textarea"); ta.value=s.text||"";
+    wrap.appendChild(row);
+    const o={start:+s.start, end:+s.end, ta, row};
+    edSegs.push(o);
+    row.querySelector(".ed-tc").addEventListener("click",()=>{ v.currentTime=o.start+0.02; v.pause(); edSync(); });
+    ta.addEventListener("input",()=>{ if(row.classList.contains("active")) $("ed-overlay").textContent=ta.value; });
+  });
+  if(!segs.length) wrap.innerHTML='<p class="modal-sub">Žádné segmenty.</p>';
+  v.ontimeupdate=edSync; v.onseeked=edSync;
 }
-function closeEditor(){ $("editmodal").classList.add("hidden"); edId=null; }
+function closeEditor(){
+  const v=$("ed-video"); v.pause(); v.removeAttribute("src");
+  try{ v.load(); }catch(e){}
+  $("editmodal").classList.add("hidden"); edId=null; edSegs=[]; edLast=null;
+}
 async function approveEdits(){
   if(!edId) return;
-  const segs=[...document.querySelectorAll('#ed-segs .ed-seg')].map(el=>({
-    start:parseFloat(el.dataset.start), end:parseFloat(el.dataset.end),
-    text:el.querySelector('textarea').value.trim()
-  })).filter(s=>s.text && s.end>s.start);
+  const segs=edSegs.map(s=>({start:s.start, end:s.end, text:s.ta.value.trim()}))
+                   .filter(s=>s.text && s.end>s.start);
   if(!segs.length){ $("ed-status").textContent="Text je prázdný."; return; }
   $("ed-start").disabled=true; $("ed-status").textContent="Spouštím dabing…";
   try{
@@ -192,6 +214,7 @@ async function approveEdits(){
 $("ed-close").addEventListener("click",closeEditor);
 $("ed-cancel").addEventListener("click",closeEditor);
 $("ed-start").addEventListener("click",approveEdits);
+$("ed-overlay").addEventListener("click",()=>{ const s=edActive(); if(s){ s.ta.focus(); try{s.ta.select();}catch(e){} } });
 $("editmodal").addEventListener("click",e=>{ if(e.target.id==="editmodal") closeEditor(); });
 
 // události

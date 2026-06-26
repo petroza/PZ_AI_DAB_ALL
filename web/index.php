@@ -80,18 +80,22 @@
 </main>
 
 <div id="editmodal" class="modal hidden">
-  <div class="modal-box">
-    <div class="modal-head"><b>✏️ Úprava textu před dabingem</b><button id="ed-close" class="theme-btn" title="Zavřít">✕</button></div>
-    <p class="modal-sub">Uprav přeložený český text. Po spuštění se nadabuje přesně tohle (časování zůstává).</p>
+  <div class="modal-box ed-wide">
+    <div class="modal-head"><b>✏️ Úprava titulků na videu</b><button id="ed-close" class="theme-btn" title="Zavřít">✕</button></div>
+    <div class="ed-video-wrap">
+      <video id="ed-video" playsinline preload="metadata"></video>
+      <div id="ed-overlay" class="ed-overlay" title="Klikni pro úpravu tohoto titulku"></div>
+    </div>
+    <p class="modal-sub">Pusť video ▶, uprav text v seznamu níže (klik na čas = skok na místo). Náhled titulku se mění živě. Pak dej <b>Dabovat</b>.</p>
     <div id="ed-segs" class="ed-segs"></div>
     <div class="modal-foot">
       <span id="ed-status" class="ed-status"></span>
       <button id="ed-cancel" class="lnk">Zrušit</button>
-      <button id="ed-start" class="go">▶ Spustit dabing</button>
+      <button id="ed-start" class="go">▶ Dabovat</button>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

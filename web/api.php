@@ -145,11 +145,22 @@ case 'stream':
     $j = load_job((string)($_GET['id'] ?? ''));
     if (!$j) jsend(['error' => 'Job nenalezen'], 404);
     $kind = (string)($_GET['kind'] ?? 'video');
-    $smap = ['video' => ['mp4', 'video/mp4'], 'audio' => ['mp3', 'audio/mpeg']];
-    if (!isset($smap[$kind])) jsend(['error' => 'Neplatný typ'], 400);
-    [$suffix, $mime] = $smap[$kind];
-    $path = OUT_DIR . '/' . clean_id($j['id']) . '.' . $suffix;
-    if (!is_file($path)) jsend(['error' => 'Výstup neexistuje'], 404);
+    if ($kind === 'source') {
+        // ZDROJOVÉ video (pro editor titulků ve stavu review – výstup ještě není)
+        $ext = clean_ext($j['ext'] ?? '');
+        $path = UP_DIR . '/' . clean_id($j['id']) . '.' . $ext;
+        $vmime = ['mp4' => 'video/mp4', 'mov' => 'video/quicktime', 'webm' => 'video/webm',
+                  'mkv' => 'video/x-matroska', 'm4v' => 'video/mp4', 'avi' => 'video/x-msvideo',
+                  'mp3' => 'audio/mpeg', 'wav' => 'audio/wav', 'm4a' => 'audio/mp4'];
+        $mime = $vmime[$ext] ?? 'video/mp4';
+        if (!$ext || !is_file($path)) jsend(['error' => 'Zdroj neexistuje'], 404);
+    } else {
+        $smap = ['video' => ['mp4', 'video/mp4'], 'audio' => ['mp3', 'audio/mpeg']];
+        if (!isset($smap[$kind])) jsend(['error' => 'Neplatný typ'], 400);
+        [$suffix, $mime] = $smap[$kind];
+        $path = OUT_DIR . '/' . clean_id($j['id']) . '.' . $suffix;
+        if (!is_file($path)) jsend(['error' => 'Výstup neexistuje'], 404);
+    }
     $size = filesize($path);
     $start = 0; $end = $size - 1;
     header('Content-Type: ' . $mime);
