@@ -14,6 +14,7 @@ const LANG = {
 };
 const STATUS = {
   uploading:"Nahrávání", pending:"Ve frontě", processing:"Zpracovává se",
+  review:"📝 Text k úpravě", approved:"Schváleno → dabuje se",
   done:"Hotovo", error:"Chyba",
 };
 
@@ -48,6 +49,7 @@ async function startDub(){
     audio_mode:document.querySelector('input[name=audio_mode]:checked').value,
     burn_subs:$("burn_subs").checked?"1":"0",
     subs_preset:$("subs_preset").value,
+    review_text:$("review_text").checked?"1":"0",
     llm_correct:$("llm_correct").checked?"1":"0",
   };
   try{
@@ -94,7 +96,12 @@ function playerHtml(id,kind){
 function jobCard(j){
   const st=STATUS[j.status]||j.status;
   const running=!["done","error"].includes(j.status);
+  const showPct=["uploading","pending","processing","approved"].includes(j.status);
   let outs="", playBox="";
+  if(j.status==="review"){
+    outs+='<button class="dlbtn" data-edit="'+esc(j.id)+'" style="border-color:var(--voice);color:var(--voice)">✏️ Upravit text a spustit dabing</button>';
+    if((j.outputs||{}).srt_src) outs+=dlbtn(j.id,"srt_src","⬇ Titulky (zdroj)");
+  }
   if(j.status==="done"){
     const o=j.outputs||{};
     const pk=o.video?"video":(o.audio?"audio":null);
@@ -113,7 +120,7 @@ function jobCard(j){
   const dir=(LANG[j.source_lang]||j.source_lang)+" → "+(LANG[j.target_lang]||j.target_lang);
   return '<div class="job '+j.status+'">'
     +'<div class="jhead"><span class="jname">'+esc(j.filename)+'</span>'
-    +'<span class="jstat">'+st+(running?" · "+j.progress+"%":"")+'</span></div>'
+    +'<span class="jstat">'+st+(showPct?" · "+j.progress+"%":"")+'</span></div>'
     +'<div class="jmeta">'+dir+' · '+esc(j.tts_engine)+(j.voice?" · "+esc(j.voice):"")
     +(j.audio_mode==="voiceover"?" · voice-over":"")+'</div>'
     +'<div class="bar"><div class="fill" style="width:'+j.progress+'%"></div></div>'
@@ -145,6 +152,48 @@ async function delJob(id){
   await fetch(API,{method:"POST",body:fd}); refresh();
 }
 
+// ---- editor textu před dabingem ----
+let edId=null;
+function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
+async function openEditor(id){
+  edId=id;
+  const wrap=$("ed-segs"); wrap.innerHTML='<p class="modal-sub">Načítám text…</p>';
+  $("ed-status").textContent=""; $("ed-start").disabled=false;
+  $("editmodal").classList.remove("hidden");
+  let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(id)); }
+  catch{ wrap.innerHTML='<p class="modal-sub">Text se nepodařilo načíst (možná se ještě připravuje).</p>'; return; }
+  const segs=d.segments||[];
+  wrap.innerHTML=segs.length?segs.map(s=>{
+    const tc=fmtTC(s.start)+" → "+fmtTC(s.end);
+    const src=s.src?'<div class="ed-src">'+esc(s.src)+'</div>':"";
+    return '<div class="ed-seg" data-start="'+s.start+'" data-end="'+s.end+'">'
+      +'<div class="ed-tc">'+tc+'</div>'+src
+      +'<textarea rows="2">'+esc(s.text||"")+'</textarea></div>';
+  }).join(""):'<p class="modal-sub">Žádné segmenty.</p>';
+}
+function closeEditor(){ $("editmodal").classList.add("hidden"); edId=null; }
+async function approveEdits(){
+  if(!edId) return;
+  const segs=[...document.querySelectorAll('#ed-segs .ed-seg')].map(el=>({
+    start:parseFloat(el.dataset.start), end:parseFloat(el.dataset.end),
+    text:el.querySelector('textarea').value.trim()
+  })).filter(s=>s.text && s.end>s.start);
+  if(!segs.length){ $("ed-status").textContent="Text je prázdný."; return; }
+  $("ed-start").disabled=true; $("ed-status").textContent="Spouštím dabing…";
+  try{
+    const r=await fetch(API+"?action=approve",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id:edId,segments:segs})});
+    const j=await r.json();
+    if(j.error) throw new Error(j.error);
+    closeEditor(); refresh(); schedule(1500);
+  }catch(e){ $("ed-status").textContent="Chyba: "+e.message; $("ed-start").disabled=false; }
+}
+$("ed-close").addEventListener("click",closeEditor);
+$("ed-cancel").addEventListener("click",closeEditor);
+$("ed-start").addEventListener("click",approveEdits);
+$("editmodal").addEventListener("click",e=>{ if(e.target.id==="editmodal") closeEditor(); });
+
 // události
 $("drop").addEventListener("click",()=>$("file").click());
 $("file").addEventListener("change",e=>{const f=e.target.files[0];if(f){picked=f;setPicked("Vybráno: "+f.name+" ("+(f.size/1048576).toFixed(1)+" MB)",false);$("start").disabled=false;}});
@@ -152,6 +201,8 @@ $("start").addEventListener("click",startDub);
 $("jobs").addEventListener("click",e=>{
   const del=e.target.closest("[data-del]");
   if(del){ delJob(del.getAttribute("data-del")); return; }
+  const ed=e.target.closest("[data-edit]");
+  if(ed){ openEditor(ed.getAttribute("data-edit")); return; }
   const pl=e.target.closest("[data-play]");
   if(pl){
     const id=pl.getAttribute("data-play"), kind=pl.getAttribute("data-kind")||"video";

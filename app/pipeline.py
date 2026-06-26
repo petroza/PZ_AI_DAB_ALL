@@ -141,7 +141,149 @@ def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
     return cues
 
 
-def run_dub(jobs, job_id: str) -> None:
+def _prepare(jobs, job_id, work, upload, target, log, prog):
+    """Fáze 1: zvuk → ASR → překlad. Vrátí (out_segs, dur, is_video, src_srt).
+
+    Každý segment je dict {start, end, text (přeložený), src (originál)}.
+    TTS se NEspouští – výstup jde buď rovnou do fáze 2, nebo k editaci uživatelem.
+    """
+    job = jobs.get(job_id)
+    is_video = job.is_video and ff.has_video(upload)
+
+    # 1) extrakce zvuku pro ASR (16 kHz mono)
+    prog("extracting_audio", 8)
+    wav16 = work / "asr16k.wav"
+    ffmpeg_tools.convert_to_wav(upload, wav16, log=log)
+    dur = ffmpeg_tools.get_audio_duration(wav16, log=log)
+    jobs.update(job_id, duration=dur)
+
+    # 2) ASR — přepis se slovními časy (+ volitelná LLM korekce)
+    prog("transcribing", 22)
+    result = asr_engine.transcribe_file(
+        str(wav16), job.source_lang, job_id, duration=dur, log=log,
+        llm_correct=job.llm_correct)
+    segs = result.get("segments", [])
+    jobs.update(job_id, segments_count=len(segs))
+    src_srt = config.OUTPUTS_DIR / f"{job_id}.src.srt"
+    exporters.write_srt(result, src_srt)
+    log(f"ASR: {len(segs)} segmentů, {dur:.1f}s")
+    if not segs:
+        log("Varování: ASR nenašel žádné mluvené segmenty (ticho nebo nerozpoznaná řeč).")
+
+    # 3) překlad segment po segmentu (zachová časování)
+    prog("translating", 40)
+    # Když zdrojový jazyk je "auto", zkus použít detekovaný jazyk z ASR
+    # (Whisper ho vrátí; parakeet auto-detekuje bez explicitního kódu).
+    # Argostranslate potřebuje konkrétní kód — bez něj vrátí původní text.
+    _WHISPER_LOCALE = {
+        "cs": "cs-CZ", "en": "en-US", "uk": "uk-UA", "ru": "ru-RU",
+        "de": "de-DE", "pl": "pl-PL", "sk": "sk-SK", "es": "es-ES",
+        "fr": "fr-FR", "it": "it-IT",
+    }
+    effective_src = job.source_lang
+    if effective_src == "auto":
+        det = result.get("detected_language")
+        if det:
+            effective_src = _WHISPER_LOCALE.get(det, "auto")
+            if effective_src != "auto":
+                log(f"Detekovaný jazyk: {det} → použiji {effective_src} pro překlad")
+    # Slouč krátké segmenty → přirozené časové bloky (řeší přecpání).
+    chunks = _merge_segments(segs)
+    if len(chunks) != len(segs):
+        log(f"Sloučeno {len(segs)} segmentů → {len(chunks)} bloků pro plynulejší dabing")
+    # Zdroj i cíl ve stejném jazyce (např. cs→cs) → NEpřekládat. „Překlad"
+    # by jen parafrázoval přepis a zanášel chyby (např. „má v sobě“ →
+    # „má ve svém náboji“). Použije se přesný přepis.
+    same_lang = (effective_src != "auto"
+                 and effective_src.split("-")[0] == target.split("-")[0])
+    if same_lang:
+        log(f"Zdroj i cíl = {target.split('-')[0]} → přeskakuji překlad (jen přepis)")
+    n = len(chunks) or 1
+    out_segs = []
+    for i, s in enumerate(chunks):
+        txt = (s.get("text") or "").strip()
+        start = float(s.get("start") or 0.0)
+        end   = float(s.get("end")   or 0.0)
+        if start >= end:
+            log(f"Přeskakuji segment {i} s neplatným časováním ({start}–{end})")
+            continue
+        # Dabingový rozpočet: kolik znaků se dá vyslovit za délku slotu
+        # (~14 zn./s je přirozené české tempo s mírným zrychlením). Drží
+        # překlad dost krátký, aby se řeč nemusela drtit časem.
+        budget = int((end - start) * 14) if (end - start) > 0 else 0
+        if txt and not same_lang:
+            tr = asr_engine.llm_translate(txt, target, log,
+                                          source=effective_src, max_chars=budget)
+        else:
+            tr = txt
+        if tr and job.llm_correct:
+            tr = asr_engine.correct_text(tr, target)
+        out_segs.append({"start": start, "end": end, "text": tr, "src": txt})
+        prog("translating", 40 + (i + 1) / n * 16)
+    return out_segs, dur, is_video, src_srt
+
+
+def _write_target_outputs(jobs, job_id, job, target, out_segs):
+    """Zapíše cílové titulky/JSON z (případně upravených) segmentů."""
+    sub_cues = _subtitle_cues(out_segs)
+    tgt_result = {
+        "text": " ".join(x["text"] for x in out_segs if x["text"]).strip(),
+        "segments": sub_cues or out_segs,
+    }
+    tgt_srt = config.OUTPUTS_DIR / f"{job_id}.{target}.srt"
+    exporters.write_srt(tgt_result, tgt_srt)
+    out_json = config.OUTPUTS_DIR / f"{job_id}.json"
+    exporters.write_json(tgt_result, out_json,
+                         {"job_id": job_id, "source_lang": job.source_lang,
+                          "target_lang": target, "filename": job.filename})
+    jobs.update(job_id, text_preview=tgt_result["text"][:8000],
+                output_srt_tgt=str(tgt_srt), output_json=str(out_json))
+    return tgt_srt
+
+
+def prepare_segments(jobs, job_id: str):
+    """Fáze 1 pro režim „upravit text před dabingem".
+
+    Vrátí list segmentů {start, end, text, src} k editaci (nebo None při chybě).
+    Worker je nahraje na relay a job přejde do stavu „review".
+    """
+    job = jobs.get(job_id)
+    if not job:
+        return None
+
+    def log(msg):
+        jobs.append_log(job, msg)
+
+    def prog(status, pct):
+        jobs.set_status(job_id, status, int(pct))
+
+    work = config.WORK_DIR / job_id
+    work.mkdir(parents=True, exist_ok=True)
+    upload = Path(job.upload_path)
+    target = job.target_lang
+    try:
+        jobs.update(job_id, started_at=datetime.now().isoformat(timespec="seconds"))
+        out_segs, dur, is_video, src_srt = _prepare(
+            jobs, job_id, work, upload, target, log, prog)
+        jobs.update(job_id, output_srt_src=str(src_srt))
+        prog("review", 50)
+        log(f"Příprava textu hotová: {len(out_segs)} segmentů k úpravě.")
+        return {"segments": out_segs, "duration": dur, "src_srt": str(src_srt),
+                "text": " ".join(x["text"] for x in out_segs if x["text"])[:8000]}
+    except Exception as e:
+        traceback.print_exc()
+        log(f"CHYBA: {e}")
+        jobs.update(job_id, error=str(e))
+        jobs.set_status(job_id, "error")
+        return None
+    finally:
+        # zdroj se pro fázi 2 stáhne znovu z relay → pracovní adresář ukliď
+        _cleanup(work)
+
+
+def run_dub(jobs, job_id: str, segments=None) -> None:
+    """Plný dabing. Když ``segments`` je None, udělá i přípravu (ASR+překlad);
+    jinak použije dodané (uživatelem upravené) segmenty a přeskočí přepis."""
     job = jobs.get(job_id)
     if not job:
         return
@@ -156,96 +298,33 @@ def run_dub(jobs, job_id: str) -> None:
     work.mkdir(parents=True, exist_ok=True)
     upload = Path(job.upload_path)
     target = job.target_lang
+    wav16 = work / "asr16k.wav"
 
     try:
         jobs.update(job_id, started_at=datetime.now().isoformat(timespec="seconds"))
-        is_video = job.is_video and ff.has_video(upload)
 
-        # 1) extrakce zvuku pro ASR (16 kHz mono)
-        prog("extracting_audio", 8)
-        wav16 = work / "asr16k.wav"
-        ffmpeg_tools.convert_to_wav(upload, wav16, log=log)
-        dur = ffmpeg_tools.get_audio_duration(wav16, log=log)
-        jobs.update(job_id, duration=dur)
+        if segments is None:
+            # plný běh – fáze 1 i 2 v jednom
+            out_segs, dur, is_video, src_srt = _prepare(
+                jobs, job_id, work, upload, target, log, prog)
+            jobs.update(job_id, output_srt_src=str(src_srt))
+        else:
+            # fáze 2 – použij upravené segmenty, přepis/překlad přeskoč
+            prog("extracting_audio", 30)
+            ffmpeg_tools.convert_to_wav(upload, wav16, log=log)
+            dur = ffmpeg_tools.get_audio_duration(wav16, log=log)
+            jobs.update(job_id, duration=dur)
+            is_video = job.is_video and ff.has_video(upload)
+            out_segs = []
+            for s in segments:
+                txt = (s.get("text") or "").strip()
+                st = float(s.get("start") or 0.0)
+                en = float(s.get("end") or 0.0)
+                if txt and en > st:
+                    out_segs.append({"start": st, "end": en, "text": txt})
+            log(f"Použity upravené titulky: {len(out_segs)} segmentů")
 
-        # 2) ASR — přepis se slovními časy (+ volitelná LLM korekce)
-        prog("transcribing", 22)
-        result = asr_engine.transcribe_file(
-            str(wav16), job.source_lang, job_id, duration=dur, log=log,
-            llm_correct=job.llm_correct)
-        segs = result.get("segments", [])
-        jobs.update(job_id, segments_count=len(segs))
-        src_srt = config.OUTPUTS_DIR / f"{job_id}.src.srt"
-        exporters.write_srt(result, src_srt)
-        log(f"ASR: {len(segs)} segmentů, {dur:.1f}s")
-        if not segs:
-            log("Varování: ASR nenašel žádné mluvené segmenty (ticho nebo nerozpoznaná řeč).")
-
-        # 3) překlad segment po segmentu (zachová časování)
-        prog("translating", 40)
-        # Když zdrojový jazyk je "auto", zkus použít detekovaný jazyk z ASR
-        # (Whisper ho vrátí; parakeet auto-detekuje bez explicitního kódu).
-        # Argostranslate potřebuje konkrétní kód — bez něj vrátí původní text.
-        _WHISPER_LOCALE = {
-            "cs": "cs-CZ", "en": "en-US", "uk": "uk-UA", "ru": "ru-RU",
-            "de": "de-DE", "pl": "pl-PL", "sk": "sk-SK", "es": "es-ES",
-            "fr": "fr-FR", "it": "it-IT",
-        }
-        effective_src = job.source_lang
-        if effective_src == "auto":
-            det = result.get("detected_language")
-            if det:
-                effective_src = _WHISPER_LOCALE.get(det, "auto")
-                if effective_src != "auto":
-                    log(f"Detekovaný jazyk: {det} → použiji {effective_src} pro překlad")
-        # Slouč krátké segmenty → přirozené časové bloky (řeší přecpání).
-        chunks = _merge_segments(segs)
-        if len(chunks) != len(segs):
-            log(f"Sloučeno {len(segs)} segmentů → {len(chunks)} bloků pro plynulejší dabing")
-        # Zdroj i cíl ve stejném jazyce (např. cs→cs) → NEpřekládat. „Překlad"
-        # by jen parafrázoval přepis a zanášel chyby (např. „má v sobě“ →
-        # „má ve svém náboji“). Použije se přesný přepis.
-        same_lang = (effective_src != "auto"
-                     and effective_src.split("-")[0] == target.split("-")[0])
-        if same_lang:
-            log(f"Zdroj i cíl = {target.split('-')[0]} → přeskakuji překlad (jen přepis)")
-        n = len(chunks) or 1
-        out_segs = []
-        for i, s in enumerate(chunks):
-            txt = (s.get("text") or "").strip()
-            start = float(s.get("start") or 0.0)
-            end   = float(s.get("end")   or 0.0)
-            if start >= end:
-                log(f"Přeskakuji segment {i} s neplatným časováním ({start}–{end})")
-                continue
-            # Dabingový rozpočet: kolik znaků se dá vyslovit za délku slotu
-            # (~14 zn./s je přirozené české tempo s mírným zrychlením). Drží
-            # překlad dost krátký, aby se řeč nemusela drtit časem.
-            budget = int((end - start) * 14) if (end - start) > 0 else 0
-            if txt and not same_lang:
-                tr = asr_engine.llm_translate(txt, target, log,
-                                              source=effective_src, max_chars=budget)
-            else:
-                tr = txt
-            if tr and job.llm_correct:
-                tr = asr_engine.correct_text(tr, target)
-            out_segs.append({"start": start, "end": end, "text": tr})
-            prog("translating", 40 + (i + 1) / n * 16)
-        # Titulky: sloučené bloky rozdělit zpět na čitelné kusy (krátké řádky).
-        sub_cues = _subtitle_cues(out_segs)
-        tgt_result = {
-            "text": " ".join(x["text"] for x in out_segs if x["text"]).strip(),
-            "segments": sub_cues or out_segs,
-        }
-        tgt_srt = config.OUTPUTS_DIR / f"{job_id}.{target}.srt"
-        exporters.write_srt(tgt_result, tgt_srt)
-        out_json = config.OUTPUTS_DIR / f"{job_id}.json"
-        exporters.write_json(tgt_result, out_json,
-                             {"job_id": job_id, "source_lang": job.source_lang,
-                              "target_lang": target, "filename": job.filename})
-        jobs.update(job_id, text_preview=tgt_result["text"][:8000],
-                    output_srt_src=str(src_srt), output_srt_tgt=str(tgt_srt),
-                    output_json=str(out_json))
+        _write_target_outputs(jobs, job_id, job, target, out_segs)
 
         # 4) TTS — z každého přeloženého segmentu jeden klip
         prog("synthesizing", 58)

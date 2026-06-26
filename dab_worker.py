@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 import traceback
@@ -20,6 +21,13 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+
+# Windows konzole (cp1250) jinak spadne na unicode v print() (např. „→", „ů").
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from app import config as appcfg, pipeline
 from app.job_manager import JobManager
@@ -99,21 +107,42 @@ def upload_result(rid, data, file_specs, timeout=900):
     raise last
 
 
-def process(job):
-    rid = job["id"]
-    ext = (job.get("ext") or "mp4").lower()
+def post_draft(rid, segments, duration, text, src_srt):
+    """Fáze 1 → nahraj návrh segmentů (k editaci) na relay; job přejde do review."""
+    import io
+    seg_blob = json.dumps({"segments": segments}, ensure_ascii=False).encode("utf-8")
+    fhs = []
+    try:
+        files = {"segments": ("segments.json", io.BytesIO(seg_blob))}
+        if src_srt and Path(src_srt).is_file():
+            fh = open(src_srt, "rb"); fhs.append(fh)
+            files["src_srt"] = (f"{rid}.src.srt", fh)
+        r = requests.post(API, params={"action": "worker_draft"}, headers=HEAD,
+                          data={"id": rid, "duration": duration,
+                                "text_preview": (text or "")[:8000]},
+                          files=files, timeout=300)
+        r.raise_for_status()
+    finally:
+        for fh in fhs:
+            try: fh.close()
+            except Exception: pass
+
+
+def fetch_segments(rid):
+    """Fáze 2 → stáhni uživatelem upravené segmenty z relay."""
+    r = requests.get(API, params={"action": "worker_segments", "id": rid},
+                     headers=HEAD, timeout=60)
+    r.raise_for_status()
+    return (r.json() or {}).get("segments") or []
+
+
+def _make_local_job(job, src):
+    """Lokální job se stejným nastavením jako relay job."""
     is_video = bool(job.get("is_video", True))
-    appcfg.ensure_dirs()
-
-    # 1) stáhni zdroj
-    progress(rid, 5)
-    src = appcfg.UPLOADS_DIR / f"relay_{rid}.{ext}"
-    download_source(rid, src)
-
-    # 2) lokální job + spuštění stávající pipeline
-    lj = jobs.create(job.get("filename") or f"{rid}.{ext}", str(src), is_video=is_video)
+    lj = jobs.create(job.get("filename") or f"{job['id']}.{job.get('ext','mp4')}",
+                     str(src), is_video=is_video)
     now = datetime.now().isoformat(timespec="seconds")
-    upd = {
+    jobs.try_queue(lj.id, **{
         "source_lang": job.get("source_lang") or "auto",
         "target_lang": job.get("target_lang") or "cs-CZ",
         "tts_engine": job.get("tts_engine") or "piper",
@@ -123,53 +152,83 @@ def process(job):
         "burn_subs": bool(job.get("burn_subs")),
         "llm_correct": bool(job.get("llm_correct", True)),
         "error": None, "started_at": now, "finished_at": None,
-    }
-    jobs.try_queue(lj.id, **upd)
-    t = threading.Thread(target=pipeline.run_dub, args=(jobs, lj.id), daemon=True)
-    t.start()
+    })
+    return lj
 
-    # 3) přeposílej průběh do relay, dokud pipeline běží
+
+def _forward_until_done(t, lj_id, rid):
+    """Přeposílej průběh lokální pipeline do relay, dokud běží vlákno."""
     last = -1
     while t.is_alive():
-        lo = jobs.get(lj.id)
+        lo = jobs.get(lj_id)
         if lo and lo.progress - last >= 3:        # méně častý progress (rate-limit)
             last = lo.progress
             progress(rid, max(5, min(98, lo.progress)))
         time.sleep(6)
     t.join(timeout=5)
 
-    lo = jobs.get(lj.id)
-    if not lo or lo.status == "error":
-        msg = (lo.error if lo else "neznámá chyba") or "dabing selhal"
+
+def process(job):
+    rid = job["id"]
+    ext = (job.get("ext") or "mp4").lower()
+    phase = job.get("phase") or "full"
+    appcfg.ensure_dirs()
+
+    progress(rid, 5)
+    src = appcfg.UPLOADS_DIR / f"relay_{rid}.{ext}"
+    download_source(rid, src)
+    lj = _make_local_job(job, src)
+
+    def _cleanup_local():
         jobs.delete(lj.id)
-        try:
-            src.unlink(missing_ok=True)
-        except Exception:
-            pass
-        raise RuntimeError(msg)
+        try: src.unlink(missing_ok=True)
+        except Exception: pass
 
-    # 4) nahraj výsledky zpět na web
-    specs = {}
-    if lo.output_video and Path(lo.output_video).is_file():
-        specs["video"] = (f"{rid}.mp4", lo.output_video)
-    if lo.output_audio and Path(lo.output_audio).is_file():
-        specs["audio"] = (f"{rid}.mp3", lo.output_audio)
-    if lo.output_srt_tgt and Path(lo.output_srt_tgt).is_file():
-        specs["srt_tgt"] = (f"{rid}.srt", lo.output_srt_tgt)
-    if lo.output_srt_src and Path(lo.output_srt_src).is_file():
-        specs["srt_src"] = (f"{rid}.src.srt", lo.output_srt_src)
-    if not specs:
-        raise RuntimeError("pipeline nevytvořila žádný výstup")
-    upload_result(rid, {"duration": lo.duration or 0,
-                        "text_preview": (lo.text_preview or "")[:8000]}, specs)
-
-    # 5) úklid lokálně (web má výsledky)
-    jobs.delete(lj.id)
     try:
-        src.unlink(missing_ok=True)
-    except Exception:
-        pass
-    print(f"[OK] {rid} ({job.get('filename')}) hotovo")
+        # ---- FÁZE 1: jen příprava textu (ASR+překlad) → review ----
+        if phase == "prepare":
+            holder = {}
+            t = threading.Thread(
+                target=lambda: holder.__setitem__("r", pipeline.prepare_segments(jobs, lj.id)),
+                daemon=True)
+            t.start()
+            _forward_until_done(t, lj.id, rid)
+            res = holder.get("r")
+            lo = jobs.get(lj.id)
+            if not res:
+                raise RuntimeError((lo.error if lo else None) or "příprava textu selhala")
+            post_draft(rid, res["segments"], res.get("duration", 0),
+                       res.get("text", ""), lo.output_srt_src if lo else None)
+            print(f"[DRAFT] {rid} -> review ({len(res['segments'])} segmentu k uprave)")
+            return
+
+        # ---- FÁZE 2 / plný běh: TTS + mux ----
+        segments = fetch_segments(rid) if phase == "dub" else None
+        t = threading.Thread(target=pipeline.run_dub, args=(jobs, lj.id),
+                             kwargs={"segments": segments}, daemon=True)
+        t.start()
+        _forward_until_done(t, lj.id, rid)
+
+        lo = jobs.get(lj.id)
+        if not lo or lo.status == "error":
+            raise RuntimeError((lo.error if lo else "neznámá chyba") or "dabing selhal")
+
+        specs = {}
+        if lo.output_video and Path(lo.output_video).is_file():
+            specs["video"] = (f"{rid}.mp4", lo.output_video)
+        if lo.output_audio and Path(lo.output_audio).is_file():
+            specs["audio"] = (f"{rid}.mp3", lo.output_audio)
+        if lo.output_srt_tgt and Path(lo.output_srt_tgt).is_file():
+            specs["srt_tgt"] = (f"{rid}.srt", lo.output_srt_tgt)
+        if lo.output_srt_src and Path(lo.output_srt_src).is_file():
+            specs["srt_src"] = (f"{rid}.src.srt", lo.output_srt_src)
+        if not specs:
+            raise RuntimeError("pipeline nevytvořila žádný výstup")
+        upload_result(rid, {"duration": lo.duration or 0,
+                            "text_preview": (lo.text_preview or "")[:8000]}, specs)
+        print(f"[OK] {rid} ({job.get('filename')}) hotovo")
+    finally:
+        _cleanup_local()
 
 
 def main():

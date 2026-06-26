@@ -55,7 +55,7 @@ function delete_job_files(array $job): void {
     $ext = clean_ext($job['ext'] ?? '');
     if ($ext) @unlink(UP_DIR . '/' . $id . '.' . $ext);
     @unlink(UP_DIR . '/' . $id . '.part');
-    foreach (['mp4','mp3','src.srt','srt','json'] as $s) @unlink(OUT_DIR . '/' . $id . '.' . $s);
+    foreach (['mp4','mp3','src.srt','srt','json','seg.json'] as $s) @unlink(OUT_DIR . '/' . $id . '.' . $s);
     @unlink(job_path($id));
 }
 
@@ -75,6 +75,7 @@ function public_job(array $j): array {
         'voice'        => $j['voice'] ?? '',
         'audio_mode'   => $j['audio_mode'] ?? 'replace',
         'burn_subs'    => (bool)($j['burn_subs'] ?? false),
+        'review_text'  => (bool)($j['review_text'] ?? false),
         'llm_correct'  => (bool)($j['llm_correct'] ?? true),
         'is_video'     => (bool)($j['is_video'] ?? true),
         'status'       => $j['status'] ?? 'pending',

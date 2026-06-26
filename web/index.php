@@ -66,6 +66,7 @@
           </select>
         </label>
         <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>
+        <label class="chk"><input id="review_text" type="checkbox"> ✏️ Upravit text před dabingem</label>
       </div>
     </div>
     <button id="start" class="go" disabled>Nahrát a dabovat</button>
@@ -78,6 +79,19 @@
   </section>
 </main>
 
-<script src="app.js?v=4"></script>
+<div id="editmodal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><b>✏️ Úprava textu před dabingem</b><button id="ed-close" class="theme-btn" title="Zavřít">✕</button></div>
+    <p class="modal-sub">Uprav přeložený český text. Po spuštění se nadabuje přesně tohle (časování zůstává).</p>
+    <div id="ed-segs" class="ed-segs"></div>
+    <div class="modal-foot">
+      <span id="ed-status" class="ed-status"></span>
+      <button id="ed-cancel" class="lnk">Zrušit</button>
+      <button id="ed-start" class="go">▶ Spustit dabing</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=5"></script>
 </body>
 </html>

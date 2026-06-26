@@ -46,6 +46,7 @@ case 'upload_init':
         'voice' => trim((string)($_POST['voice'] ?? '')),
         'audio_mode' => $am, 'subs_preset' => $preset,
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
+        'review_text' => ((string)($_POST['review_text'] ?? '0')) === '1',
         'llm_correct' => ((string)($_POST['llm_correct'] ?? '1')) === '1',
         'is_video' => in_array($ext, $VIDEO_EXT, true),
         'status' => 'uploading', 'progress' => 0,
@@ -99,6 +100,45 @@ case 'delete':
     if (!$j) jsend(['error' => 'Job nenalezen'], 404);
     delete_job_files($j);
     jsend(['ok' => true, 'deleted' => $j['id']]);
+
+// ---------- REVIEW: úprava textu před dabingem ----------------------------
+case 'segments':
+    // Vrať návrh segmentů {start,end,text,src} k editaci (stav review/approved).
+    $j = load_job((string)($_GET['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    $p = OUT_DIR . '/' . clean_id($j['id']) . '.seg.json';
+    if (!is_file($p)) jsend(['error' => 'Segmenty zatím nejsou připravené'], 404);
+    $d = json_decode((string)file_get_contents($p), true);
+    jsend(['id' => $j['id'], 'status' => $j['status'] ?? '',
+           'segments' => is_array($d['segments'] ?? null) ? $d['segments'] : []]);
+
+case 'approve':
+    // Ulož upravené segmenty a pošli job do fáze 2 (dabing). Tělo = JSON.
+    $in = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($in)) $in = $_POST;
+    $j = load_job((string)($in['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    if (!in_array($j['status'] ?? '', ['review', 'approved', 'error'], true))
+        jsend(['error' => 'Tento job není ve stavu k úpravě'], 400);
+    $segs = $in['segments'] ?? null;
+    if (!is_array($segs) || !$segs) jsend(['error' => 'Chybí segmenty'], 400);
+    if (count($segs) > 20000) jsend(['error' => 'Příliš mnoho segmentů'], 400);
+    $clean = [];
+    foreach ($segs as $s) {
+        $txt = trim((string)($s['text'] ?? ''));
+        $st = (float)($s['start'] ?? 0); $en = (float)($s['end'] ?? 0);
+        if ($txt === '' || $en <= $st) continue;
+        $clean[] = ['start' => $st, 'end' => $en, 'text' => mb_substr($txt, 0, 2000)];
+    }
+    if (!$clean) jsend(['error' => 'Po úpravě nezůstal žádný text'], 400);
+    file_put_contents(OUT_DIR . '/' . clean_id($j['id']) . '.seg.json',
+        json_encode(['segments' => $clean], JSON_UNESCAPED_UNICODE), LOCK_EX);
+    $j['status'] = 'approved';   // worker si ho vyzvedne pro fázi 2
+    $j['progress'] = 50;
+    $j['error'] = null;
+    $j['updated_at'] = now();
+    save_job($j);
+    jsend(['ok' => true, 'count' => count($clean)]);
 
 // ---------- STREAM (přehrávání ve webu, podpora Range pro přetáčení) -------
 case 'stream':
