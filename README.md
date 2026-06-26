@@ -180,6 +180,12 @@ překlad** na časový rozpočet, **slučuje krátké segmenty** a **rozepisuje 
 („8 000" → „osm tisíc"). Cizí značky čte foneticky podle `tts_phonetics.txt`
 (Porsche → Porše, Enyaq → Enjak; rozšiřitelné).
 
+**Výběr hlasu (XTTS):** pole „Hlas" nech **prázdné** → naklonuje původního
+mluvčího z videa. Nebo vyber z **58 vestavěných hlasů** (doporučené první) –
+ženské *Daisy, Alison, Gracie, Alexandra*, mužské *Damien, Aaron, Baldur, Viktor*.
+Cizí značky se čtou foneticky (`tts_phonetics.txt`), čísla se rozepisují slovy,
+titulky se dělí na čitelné 2řádkové cue (lze i zapéct do videa).
+
 > XTTS dabing nejvíc vynikne na **cizojazyčných** videích (en/ru → čeština).
 > U velmi rychlého českého hlasatelského VO zůstává nejčistší originál + titulky.
 
