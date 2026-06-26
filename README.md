@@ -219,4 +219,9 @@ počítač (pokud výslovně nezvolíš cloudový překladač/hlas, který tu ne
 
 ## Licence
 
-MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE).
+Kód: MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE).
+
+**Modely a nástroje třetích stran** (TTS, ASR, překlad, ffmpeg…) mají vlastní,
+samostatné licence — viz [MODEL_LICENSES.md](MODEL_LICENSES.md). Pozor zejména na
+**XTTS v2 (nekomerční, CPML)** a na osobnostní práva při klonování hlasu. Před
+produkčním/komerčním nasazením si licence ověř.
