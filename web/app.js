@@ -101,7 +101,8 @@ function jobCard(j){
     if(pk){
       const open=!!openPlayers[j.id];
       outs+='<button class="dlbtn" data-play="'+esc(j.id)+'" data-kind="'+pk+'">'+(open?"⏸ Skrýt":"▶ Přehrát")+'</button>';
-      playBox='<div class="player" id="pl-'+esc(j.id)+'">'+(open?playerHtml(j.id,pk):"")+'</div>';
+      // box necháváme prázdný – živý <video> doplní klik a refresh() ho zachová
+      playBox='<div class="player" id="pl-'+esc(j.id)+'"></div>';
     }
     if(o.video) outs+=dlbtn(j.id,"video","⬇ Video");
     if(o.audio) outs+=dlbtn(j.id,"audio","⬇ Audio");
@@ -128,7 +129,12 @@ async function refresh(){
   const running=d.jobs.some(j=>!["done","error"].includes(j.status));
   if(!running && sig===lastSig) return false;
   lastSig=sig;
+  // odpoj živé přehrávače, ať je překreslení nezničí (jinak video skáče na 0)
+  const keep={};
+  Object.keys(openPlayers).forEach(id=>{const b=document.getElementById("pl-"+id);if(b&&b.firstChild)keep[id]=b.firstChild;});
   $("jobs").innerHTML=d.jobs.length?d.jobs.map(jobCard).join(""):'<p class="empty">Zatím žádné zakázky.</p>';
+  // vrať stejné <video> nody zpět → plynule pokračují tam, kde byly
+  Object.keys(openPlayers).forEach(id=>{const b=document.getElementById("pl-"+id);if(!b)return;if(keep[id])b.appendChild(keep[id]);else b.innerHTML=playerHtml(id,openPlayers[id]);});
   return running;
 }
 function schedule(ms){clearTimeout(timer);timer=setTimeout(async()=>{const r=await refresh();schedule(r?2000:6000);},ms);}
