@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
 <script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <header class="top">
@@ -94,6 +94,7 @@
       <video id="ed-video" playsinline preload="metadata"></video>
       <div id="ed-overlay" class="ed-overlay" contenteditable="false" spellcheck="false" title="Klikni a piš přímo do titulku"></div>
       <div id="ed-srchint" class="ed-srchint"></div>
+      <div id="ed-len" class="ed-len"></div>
     </div>
     <div class="ed-timeline">
       <button id="ed-prev" class="ed-play" title="Předchozí titulek">⏮</button>
@@ -114,6 +115,6 @@
   </div>
 </div>
 
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

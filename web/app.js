@@ -153,9 +153,28 @@ async function delJob(id){
 }
 
 // ---- editor titulků na videu (video-centric, jako ElevenLabs) ----
-let edId=null, edSegs=[], edLast=null, edEditing=false;
+let edId=null, edSegs=[], edLast=null, edEditing=false, edMaxChars=0;
 function fmtTC(s){s=Math.max(0,s||0);const m=Math.floor(s/60),sec=Math.floor(s%60);return (m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}
 function edActive(){const t=$("ed-video").currentTime||0;return edSegs.find(s=>t>=s.start-0.04 && t<s.end);}
+function edFitOverlay(){
+  // velikost titulku odvoď ze ŠÍŘKY videa, ať náhled = formát videa (nepřetéká).
+  const wrap=document.querySelector('.ed-video-wrap'), ov=$("ed-overlay");
+  const w=(wrap&&wrap.clientWidth)||$("ed-video").clientWidth||480;
+  const fs=Math.max(13,Math.round(w*0.05));
+  ov.style.fontSize=fs+"px";
+  const perLine=Math.max(6,Math.floor(w*0.9/(fs*0.55)));
+  edMaxChars=perLine*2;                 // pohodlně 2 řádky na šířku videa
+  edUpdateLen();
+}
+function edUpdateLen(){
+  const cur=edActive(), el=$("ed-len");
+  if(!cur){ el.textContent=""; el.classList.remove("warn"); return; }
+  const txt=(edEditing?$("ed-overlay").textContent:cur.text)||"";
+  const words=(txt.trim().match(/\S+/g)||[]).length;
+  const over=edMaxChars>0 && txt.length>edMaxChars;
+  el.textContent=words+" slov"+(over?" · dlouhé, zalomí se":"");
+  el.classList.toggle("warn",over);
+}
 function gotoTime(t){ const v=$("ed-video"); v.pause(); v.currentTime=Math.max(0,t+0.02); edSync(); }
 function edNextIdx(){ const t=$("ed-video").currentTime; for(let i=0;i<edSegs.length;i++) if(edSegs[i].start>t+0.15) return i; return -1; }
 function edPrevIdx(){ const t=$("ed-video").currentTime; for(let i=edSegs.length-1;i>=0;i--) if(edSegs[i].start<t-0.15) return i; return -1; }
@@ -185,6 +204,7 @@ function edSync(){
     edLast=cur;
   }
   if(!edEditing) ov.textContent=cur?cur.text:"";   // při psaní do obrazu nepřepisuj
+  edUpdateLen();
 }
 async function openEditor(id){
   edId=id; edSegs=[]; edLast=null; edEditing=false;
@@ -200,9 +220,10 @@ async function openEditor(id){
   ov.textContent="";
   v.src=API+"?action=stream&id="+encodeURIComponent(id)+"&kind=source"; v.load();
   v.ontimeupdate=edSync; v.onseeked=edSync;
-  v.onloadedmetadata=()=>{ edBuildMarkers(); edTimeline(); };
+  v.onloadedmetadata=()=>{ edBuildMarkers(); edTimeline(); edFitOverlay(); };
   v.onplay=()=>$("ed-play").textContent="⏸"; v.onpause=()=>$("ed-play").textContent="▶";
   if(v.readyState>=1){ edBuildMarkers(); edTimeline(); }
+  edFitOverlay();
   if(edSegs.length) v.currentTime=edSegs[0].start+0.02;
   edSync();
 }
@@ -240,7 +261,8 @@ $("ed-track").addEventListener("click",e=>{
 const _ov=$("ed-overlay");
 _ov.addEventListener("click",()=>{ if(_ov.getAttribute("contenteditable")!=="true" && edActive()){ $("ed-video").pause(); _ov.setAttribute("contenteditable","true"); _ov.focus(); }});
 _ov.addEventListener("focus",()=>{ edEditing=true; $("ed-video").pause(); });
-_ov.addEventListener("input",()=>{ const s=edActive(); if(s) s.text=_ov.textContent; });
+_ov.addEventListener("input",()=>{ const s=edActive(); if(s) s.text=_ov.textContent; edUpdateLen(); });
+window.addEventListener("resize",()=>{ if(!$("editmodal").classList.contains("hidden")) edFitOverlay(); });
 _ov.addEventListener("blur",()=>{ edEditing=false; _ov.setAttribute("contenteditable","false"); });
 _ov.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); _ov.blur(); }});
 $("ed-close").addEventListener("click",closeEditor);

@@ -164,3 +164,10 @@ select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-co
   font-size:clamp(11px,2.3vw,15px);font-style:italic;text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none}
 .ed-srchint:empty{display:none}
 .ed-overlay{bottom:9%;font-size:clamp(14px,3.6vw,26px)}
+
+/* ---- ukazatel délky titulku + font dle šířky videa ---- */
+#ed-overlay{font-size:22px}   /* výchozí; JS přepočítá dle šířky videa */
+.ed-len{position:absolute;top:8px;right:10px;background:rgba(0,0,0,.55);color:#dfe9e9;
+  font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:7px;pointer-events:none;letter-spacing:.2px}
+.ed-len:empty{display:none}
+.ed-len.warn{background:rgba(210,70,50,.9);color:#fff}
