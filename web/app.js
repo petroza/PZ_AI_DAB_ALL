@@ -261,6 +261,7 @@ async function openEditor(id){
   edSegs=(d.segments||[]).map(s=>({start:+s.start, end:+s.end, text:s.text||"", src:s.src||"", marker:null}));
   edChars=+(d.subs_chars||0); edLines=(+d.subs_maxlines===1?1:2); edSize=String(d.subs_size||"");
   $("ed-chars").value=String(edChars); edSetLines(edLines); $("ed-size").value=edSize;
+  $("ed-trans").value=d.translator||"local";
   ov.textContent="";
   v.src=API+"?action=stream&id="+encodeURIComponent(id)+"&kind=source"; v.load();
   v.ontimeupdate=edSync; v.onseeked=edSync;
@@ -307,6 +308,35 @@ async function downloadSrt(){
   if(edDirty){ try{ await pushSegments("save_segments"); }catch(e){ $("ed-status").textContent="Uložení selhalo: "+e.message; return; } }
   window.location.href=API+"?action=export_srt&id="+encodeURIComponent(edId);
 }
+async function reloadEditorSegments(){
+  let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(edId)); }catch{ return; }
+  edSegs=(d.segments||[]).map(s=>({start:+s.start, end:+s.end, text:s.text||"", src:s.src||"", marker:null}));
+  edLast=null; edDirty=false; edBuildMarkers(); edSync();
+}
+async function retranslate(){
+  if(!edId) return;
+  const tr=$("ed-trans").value;
+  $("ed-retrans").disabled=true; $("ed-status").textContent="Překládám…";
+  try{
+    const r=await fetch(API+"?action=retranslate",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({id:edId,translator:tr})});
+    const j=await r.json(); if(j.error) throw new Error(j.error);
+    if(j.done){ await reloadEditorSegments(); $("ed-status").textContent="Přeloženo ✓ ("+(j.count||edSegs.length)+")"; }
+    else { $("ed-status").textContent="Překládám na PC… (chvíli to trvá)"; await pollRetrans(); }
+  }catch(e){ $("ed-status").textContent="Chyba: "+e.message; }
+  finally{ $("ed-retrans").disabled=false; }
+}
+async function pollRetrans(){
+  let sawProc=false;
+  for(let i=0;i<30;i++){                       // ~2 min
+    await new Promise(r=>setTimeout(r,4000));
+    if(!edId) return;
+    let d; try{ d=await jget(API+"?action=segments&id="+encodeURIComponent(edId)); }catch{ continue; }
+    if(d.status==="processing") sawProc=true;
+    if(sawProc && d.status==="review"){ await reloadEditorSegments(); $("ed-status").textContent="Přeloženo ✓"; return; }
+  }
+  $("ed-status").textContent="Re-překlad běží na pozadí – za chvíli zavři a otevři editor.";
+}
 // ovládání: play/pauza, předchozí/další titulek, klik na timeline
 $("ed-play").addEventListener("click",()=>{ const v=$("ed-video"); if(v.paused) v.play().catch(()=>{}); else v.pause(); });
 $("ed-prev").addEventListener("click",()=>{ const i=edPrevIdx(); if(i>=0) gotoTime(edSegs[i].start); });
@@ -322,6 +352,7 @@ $("ed-chars").addEventListener("change",()=>{ edChars=parseInt($("ed-chars").val
 $("ed-line1").addEventListener("click",()=>{ edSetLines(1); edDirty=true; edFitOverlay(); edSync(); });
 $("ed-line2").addEventListener("click",()=>{ edSetLines(2); edDirty=true; edFitOverlay(); edSync(); });
 $("ed-srt").addEventListener("click",downloadSrt);
+$("ed-retrans").addEventListener("click",retranslate);
 // editace PŘÍMO v obraze (klikni na titulek na videu a piš)
 const _ov=$("ed-overlay");
 _ov.addEventListener("click",()=>{ const s=edActive(); if(_ov.getAttribute("contenteditable")!=="true" && s){ $("ed-video").pause(); edEditing=true; _ov.textContent=s.text; _ov.setAttribute("contenteditable","true"); _ov.focus(); edUpdateLen(); }});

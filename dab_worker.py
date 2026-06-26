@@ -176,11 +176,37 @@ def _forward_until_done(t, lj_id, rid):
     t.join(timeout=5)
 
 
+def _retranslate(job):
+    """Re-překlad uložených segmentů jiným překladačem – bez ASR a bez videa."""
+    from engines.asr import asr_engine
+    rid = job["id"]
+    tr = job.get("translator") or "local"
+    target = job.get("target_lang") or "cs-CZ"
+    src_lang = job.get("source_lang") or "auto"
+    progress(rid, 10)
+    segs = fetch_segments(rid)
+    new, n = [], (len(segs) or 1)
+    for i, s in enumerate(segs):
+        src = (s.get("src") or s.get("text") or "").strip()
+        txt = (asr_engine.translate_text(src, target, source=src_lang, translator=tr)
+               if src else (s.get("text") or ""))
+        new.append({"start": s.get("start"), "end": s.get("end"),
+                    "text": txt, "src": s.get("src") or src})
+        progress(rid, 10 + int((i + 1) / n * 80))
+    text = " ".join(x["text"] for x in new if x["text"])[:8000]
+    post_draft(rid, new, 0, text, None)
+    print(f"[RETRANS] {rid} -> review ({tr}, {len(new)} segmentu)")
+
+
 def process(job):
     rid = job["id"]
     ext = (job.get("ext") or "mp4").lower()
     phase = job.get("phase") or "full"
     appcfg.ensure_dirs()
+
+    if phase == "retranslate":           # jen přeložit znovu, bez videa/ASR
+        _retranslate(job)
+        return
 
     progress(rid, 5)
     src = appcfg.UPLOADS_DIR / f"relay_{rid}.{ext}"

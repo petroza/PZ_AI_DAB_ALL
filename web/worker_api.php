@@ -19,8 +19,14 @@ case 'worker_claim':
     if ($lf) flock($lf, LOCK_EX);
     $picked = null; $phase = 'full';
     $jobs = array_reverse(all_jobs());  // nejstarší první
-    // 1) approved (uživatel schválil upravený text) → fáze 2: dabing
+    // 0) re-překlad (uživatel přepnul překladač u review jobu) – přednost
     foreach ($jobs as $j) {
+        if (($j['status'] ?? '') === 'review' && !empty($j['retranslate'])) {
+            $picked = $j; $phase = 'retranslate'; break;
+        }
+    }
+    // 1) approved (uživatel schválil upravený text) → fáze 2: dabing
+    if (!$picked) foreach ($jobs as $j) {
         if (($j['status'] ?? '') === 'approved') { $picked = $j; $phase = 'dub'; break; }
     }
     // 2) pending (nový job) → buď příprava textu (review), nebo rovnou plný běh
@@ -48,6 +54,7 @@ case 'worker_claim':
         $picked['status'] = 'processing';
         $picked['progress'] = 3;
         $picked['phase'] = $phase;          // uloženo pro případnou obnovu osiřelého jobu
+        if ($phase === 'retranslate') unset($picked['retranslate']);   // flag spotřebován
         $picked['updated_at'] = now();
         save_job($picked);
     }
@@ -86,7 +93,7 @@ case 'worker_draft':
         if (move_uploaded_file($_FILES['src_srt']['tmp_name'], OUT_DIR . '/' . $id . '.src.srt'))
             $j['outputs'] = array_merge((array)($j['outputs'] ?? []), ['srt_src' => true]);
     }
-    if (isset($_POST['duration'])) $j['duration'] = (float)$_POST['duration'];
+    if (isset($_POST['duration']) && (float)$_POST['duration'] > 0) $j['duration'] = (float)$_POST['duration'];
     $j['text_preview'] = (string)($_POST['text_preview'] ?? '');
     $j['status'] = 'review';
     $j['progress'] = 50;

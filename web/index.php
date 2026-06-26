@@ -139,6 +139,16 @@
       </span>
       <button id="ed-srt" class="dlbtn" type="button" title="Stáhnout titulky (SRT) bez dabingu">⬇ SRT</button>
     </div>
+    <div class="ed-controls ed-trans-row">
+      <label>Překladač
+        <select id="ed-trans">
+          <option value="local">Lokální gemma4</option>
+          <option value="gemma31b">gemma4:31b</option>
+          <option value="google">Google (online)</option>
+        </select>
+      </label>
+      <button id="ed-retrans" class="dlbtn" type="button" title="Přeložit text znovu vybraným překladačem">🔄 Přeložit znovu</button>
+    </div>
     <p class="modal-sub">Pusť ▶, na chybě zastav, <b>klikni na titulek na videu</b> a přepiš. ⏮ / ⏭ skáče. Vše se <b>ukládá</b> (i bez dabování).</p>
     <div class="modal-foot">
       <span id="ed-status" class="ed-status"></span>
@@ -148,6 +158,6 @@
   </div>
 </div>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

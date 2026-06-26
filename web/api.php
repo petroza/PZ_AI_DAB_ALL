@@ -117,6 +117,7 @@ case 'segments':
            'subs_chars' => (int)($j['subs_chars'] ?? 0),
            'subs_maxlines' => (int)($j['subs_maxlines'] ?? 2),
            'subs_size' => (string)($j['subs_size'] ?? ''),
+           'translator' => (string)($j['translator'] ?? 'local'),
            'segments' => is_array($d['segments'] ?? null) ? $d['segments'] : []]);
 
 case 'approve':         // ulož + spusť dabing (fáze 2)
@@ -173,6 +174,47 @@ case 'export_srt':
     header('Content-Type: application/x-subrip; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $base . '.cs.srt"');
     echo $srt; exit;
+
+case 'retranslate':
+    // Přelož znovu (z uložených originálů) jiným překladačem. Google zvládne
+    // relay HNED; lokální/gemma31b se zařadí pro worker.
+    $in = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($in)) $in = $_POST;
+    $j = load_job((string)($in['id'] ?? ''));
+    if (!$j) jsend(['error' => 'Job nenalezen'], 404);
+    if (!in_array($j['status'] ?? '', ['review', 'error'], true))
+        jsend(['error' => 'Job není ve stavu k překladu'], 400);
+    $tr = (string)($in['translator'] ?? 'local');
+    if (!in_array($tr, ['local', 'gemma31b', 'google'], true)) $tr = 'local';
+    $p = OUT_DIR . '/' . clean_id($j['id']) . '.seg.json';
+    if (!is_file($p)) jsend(['error' => 'Segmenty nejsou připravené'], 404);
+    $j['translator'] = $tr;
+    if ($tr === 'google') {
+        @set_time_limit(120);
+        $d = json_decode((string)file_get_contents($p), true);
+        $segs = is_array($d['segments'] ?? null) ? $d['segments'] : [];
+        $sl = strtolower(substr((string)($j['source_lang'] ?? 'auto'), 0, 2));
+        if ($sl === 'au' || $sl === '') $sl = 'auto';
+        $tl = strtolower(substr((string)($j['target_lang'] ?? 'cs'), 0, 2)) ?: 'cs';
+        $ok = 0;
+        foreach ($segs as &$s) {
+            $src = trim((string)($s['src'] ?? $s['text'] ?? ''));
+            if ($src === '') continue;
+            $out = google_translate_php($src, $sl, $tl);
+            if ($out !== null) { $s['text'] = mb_substr($out, 0, 2000); $ok++; }
+        }
+        unset($s);
+        if ($ok === 0) jsend(['error' => 'Google překlad se nezdařil (síť?)'], 502);
+        file_put_contents($p, json_encode(['segments' => $segs], JSON_UNESCAPED_UNICODE), LOCK_EX);
+        $j['updated_at'] = now();
+        save_job($j);
+        jsend(['ok' => true, 'done' => true, 'count' => $ok]);
+    }
+    // lokální / gemma31b → ať to udělá worker (má Ollamu)
+    $j['retranslate'] = true;
+    $j['updated_at'] = now();
+    save_job($j);
+    jsend(['ok' => true, 'done' => false, 'queued' => true]);
 
 // ---------- STREAM (přehrávání ve webu, podpora Range pro přetáčení) -------
 case 'stream':

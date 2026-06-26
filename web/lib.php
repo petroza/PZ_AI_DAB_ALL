@@ -59,6 +59,36 @@ function delete_job_files(array $job): void {
     @unlink(job_path($id));
 }
 
+function google_translate_php(string $text, string $sl, string $tl): ?string {
+    // Google Translate přes veřejný endpoint (zdarma, bez klíče). Pro re-překlad
+    // přímo z relay (Forpsi má outbound HTTP) → okamžitý výsledek bez workeru.
+    $text = trim($text);
+    if ($text === '') return null;
+    $url = 'https://translate.googleapis.com/translate_a/single?client=gtx'
+         . '&sl=' . rawurlencode($sl ?: 'auto') . '&tl=' . rawurlencode($tl ?: 'cs')
+         . '&dt=t&q=' . rawurlencode($text);
+    $r = null;
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERAGENT => 'Mozilla/5.0', CURLOPT_SSL_VERIFYPEER => false]);
+        $r = curl_exec($ch);
+        curl_close($ch);
+    }
+    if (!$r) {
+        $ctx = stream_context_create(['http' => ['timeout' => 15,
+            'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+        $r = @file_get_contents($url, false, $ctx);
+    }
+    if (!$r) return null;
+    $d = json_decode($r, true);
+    if (!is_array($d) || !isset($d[0]) || !is_array($d[0])) return null;
+    $out = '';
+    foreach ($d[0] as $seg) { if (isset($seg[0])) $out .= $seg[0]; }
+    $out = trim($out);
+    return $out !== '' ? $out : null;
+}
+
 function srt_ts(float $sec): string {
     if ($sec < 0) $sec = 0.0;
     $ms = (int)round($sec * 1000);
