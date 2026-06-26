@@ -88,9 +88,17 @@
     <div class="modal-head"><b>✏️ Úprava titulků na videu</b><button id="ed-close" class="theme-btn" title="Zavřít">✕</button></div>
     <div class="ed-video-wrap">
       <video id="ed-video" playsinline preload="metadata"></video>
-      <div id="ed-overlay" class="ed-overlay" title="Klikni pro úpravu tohoto titulku"></div>
+      <div id="ed-overlay" class="ed-overlay" contenteditable="false" spellcheck="false" title="Klikni a piš přímo do titulku"></div>
     </div>
-    <p class="modal-sub">Pusť video ▶, uprav text v seznamu níže (klik na čas = skok na místo). Náhled titulku se mění živě. Pak dej <b>Dabovat</b>.</p>
+    <div class="ed-timeline">
+      <button id="ed-play" class="ed-play" title="Přehrát / pauza">▶</button>
+      <span id="ed-time" class="ed-time">0:00 / 0:00</span>
+      <div id="ed-track" class="ed-track">
+        <div id="ed-markers" class="ed-markers"></div>
+        <div id="ed-playhead" class="ed-playhead"></div>
+      </div>
+    </div>
+    <p class="modal-sub">Klikni do titulku <b>přímo na videu</b> a piš. Na <b>timeline</b> klikni pro skok, značky = titulky. Pak dej <b>Dabovat</b>.</p>
     <div id="ed-segs" class="ed-segs"></div>
     <div class="modal-foot">
       <span id="ed-status" class="ed-status"></span>
@@ -100,6 +108,6 @@
   </div>
 </div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
