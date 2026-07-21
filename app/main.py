@@ -96,7 +96,7 @@ class DubRequest(BaseModel):
     target_lang: "str | None" = None
     tts_engine: "str | None" = None
     voice: "str | None" = None
-    audio_mode: "str | None" = None       # replace | voiceover
+    audio_mode: "str | None" = None       # replace | voiceover | subtitles
     burn_subs: "bool | None" = None
     llm_correct: "bool | None" = None
 
@@ -119,6 +119,7 @@ def api_status() -> dict:
     eng = asr_engine.engine_status()
     ollama = _ollama_status()
     piper_ready, piper_info = get_backend("piper").is_ready()
+    xtts_ready, xtts_info = get_backend("xtts").is_ready()
     vs_ready, vs_info = get_backend("voicestudio").is_ready()
     cs_voice = config.find_piper_voice("cs-CZ")
     translate_ok = ollama["ok"] or eng["argostranslate_ok"]
@@ -141,6 +142,7 @@ def api_status() -> dict:
             "default": config.TTS_ENGINE,
             "piper": {"ok": piper_ready, "info": piper_info,
                       "cs_voice": bool(cs_voice)},
+            "xtts": {"ok": xtts_ready, "info": xtts_info},
             "voicestudio": {"ok": vs_ready, "info": vs_info,
                             "url": config.VOICESTUDIO_URL},
         },
@@ -148,7 +150,8 @@ def api_status() -> dict:
         "target_languages": config.TARGET_LANGUAGES,
         "defaults": {"source": config.DEFAULT_SOURCE,
                      "target": config.DEFAULT_TARGET,
-                     "audio_mode": config.AUDIO_MODE},
+                     "audio_mode": config.AUDIO_MODE,
+                     "burn_subs": config.BURN_SUBS},
         "ready": ff["ok"] and eng["asr_ok"] and piper_ready,
     }
 
@@ -232,6 +235,10 @@ def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
             v = getattr(req, k)
             if v is not None:
                 upd[k] = v
+    if upd.get("audio_mode", job.audio_mode) not in ("replace", "voiceover", "subtitles"):
+        raise HTTPException(400, "Neplatný režim zvuku.")
+    if upd.get("audio_mode", job.audio_mode) == "subtitles":
+        upd["burn_subs"] = True
     if not jobs.try_queue(job_id, **upd):
         raise HTTPException(409, "Job už běží.")
     threading.Thread(target=pipeline.run_dub, args=(jobs, job_id),
@@ -281,8 +288,26 @@ def api_download(job_id: str, kind: str) -> FileResponse:
     if not entry or not entry[0] or not Path(entry[0]).is_file():
         raise HTTPException(404, f"Výstup '{kind}' pro tento job neexistuje.")
     path, media, ext = entry
-    name = f"{Path(job.filename).stem}.{ext}"
+    stem = Path(job.filename).stem
+    # MP4 se zapečenými titulky a samostatné SRT nesmějí mít stejný název:
+    # VLC a další přehrávače by SRT automaticky načetly a zobrazily titulky 2×.
+    if kind == "video":
+        suffix = "s-ceskymi-titulky.mp4" if job.burn_subs else "dabing.mp4"
+        name = f"{stem}.{suffix}"
+    elif kind == "srt_tgt":
+        name = f"{stem}.samostatne-ceske-titulky.srt"
+    else:
+        name = f"{stem}.{ext}"
     return FileResponse(path, media_type=media, filename=name)
+
+
+@app.post("/api/jobs/clear")
+def api_clear(scope: str = "finished") -> dict:
+    """Hromadně promaže frontu. scope=finished (jen hotové/chybné) | all
+    (i čekající nespuštěné). Aktivně běžící zakázka zůstává."""
+    if scope not in ("finished", "all"):
+        raise HTTPException(400, "Neplatný scope (finished | all).")
+    return jobs.clear(scope)
 
 
 @app.delete("/api/jobs/{job_id}")

@@ -512,11 +512,12 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
     srt_rel = tmp_ass.name
 
     total = get_audio_duration(video_path) or 0.0
+    audio_args = ["-c:a", "copy"] if opts.get("audio_copy") else ["-c:a", "aac", "-b:a", "192k"]
     cmd = [
         str(ffmpeg), "-y", "-i", str(video_path),
         "-vf", f"subtitles={srt_rel}",
         "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        *audio_args, "-movflags", "+faststart",
         "-progress", "pipe:1", "-nostats", str(output_path),
     ]
     _log(log, f"FFMPEG burn-in (cwd={work_dir}): " + " ".join(cmd))

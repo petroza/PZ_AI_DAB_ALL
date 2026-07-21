@@ -32,17 +32,16 @@ function fillSel(sel, codes, def){
 const VOICES = {
   xtts: [
     ["", "🔊 Klonovat původní hlas (doporučeno)"],
-    ["Daisy Studious", "Daisy Studious — ženský"],
+    ["Daisy Studious", "👩 XTTS ženský hlas — doporučeno"],
     ["Alison Dietlinde", "Alison Dietlinde — ženský"],
     ["Gracie Wise", "Gracie Wise — ženský"],
     ["Alexandra Hisakawa", "Alexandra Hisakawa — ženský"],
-    ["Damien Black", "Damien Black — mužský"],
+    ["Damien Black", "👨 XTTS mužský hlas — doporučeno"],
     ["Aaron Dreschner", "Aaron Dreschner — mužský"],
     ["Baldur Sanjin", "Baldur Sanjin — mužský"],
     ["Viktor Eka", "Viktor Eka — mužský"],
   ],
   piper: [["", "Automaticky dle cílového jazyka"]],
-  voicestudio: [["", "Výchozí hlas (Chatterbox)"]],
 };
 function fillVoicesFor(engId, voiceId, hintId, want){
   const engEl=$(engId), sel=$(voiceId);
@@ -69,6 +68,15 @@ async function loadStatus(){
 
 function setPicked(msg,err){const e=$("picked");e.textContent=msg;e.classList.toggle("err",!!err);}
 function upbar(show,pct){const b=$("upbar"),f=$("upbar-fill");if(b)b.classList.toggle("hidden",!show);if(f&&pct!=null)f.style.width=pct+"%";}
+
+function syncAudioMode(){
+  const r=document.querySelector('input[name=audio_mode]:checked');
+  const only=!!r&&r.value==="subtitles";
+  if($("tts_engine")) $("tts_engine").disabled=only;
+  if($("voice")) $("voice").disabled=only;
+  if($("burn_subs")){if(only)$("burn_subs").checked=true;$("burn_subs").disabled=only;}
+  if($("start")) $("start").textContent=only?"Vytvořit video s českými titulky":"Spustit dabing";
+}
 
 async function startDub(){
   if(!picked) return;
@@ -519,6 +527,10 @@ $("jobs").addEventListener("click",e=>{
   }
 });
 $("tts_engine").addEventListener("change",fillVoices);
+document.querySelectorAll('input[name=audio_mode]').forEach(el=>el.addEventListener("change",()=>{
+  syncAudioMode();
+  $("preset-wrap").classList.toggle("hidden",!$("burn_subs").checked);
+}));
 fillVoices();
 $("burn_subs").addEventListener("change",e=>{$("preset-wrap").classList.toggle("hidden",!e.target.checked);});
 // re-dub modal
@@ -536,4 +548,5 @@ $("redubmodal").addEventListener("click",e=>{ if(e.target.id==="redubmodal") clo
 })();
 
 loadStatus();
+syncAudioMode();
 refresh().then(r=>schedule(r?2000:6000));
