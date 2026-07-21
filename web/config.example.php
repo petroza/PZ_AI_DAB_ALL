@@ -19,7 +19,7 @@ const SOURCE_LANGS = ['auto','cs-CZ','en-US','uk-UA','ru-RU','de-DE',
                       'pl-PL','sk-SK','es-ES','fr-FR','it-IT'];
 const TARGET_LANGS = ['cs-CZ','en-US','uk-UA','de-DE','pl-PL',
                       'sk-SK','es-ES','fr-FR','it-IT','ru-RU'];
-const TTS_ENGINES  = ['piper','xtts','voicestudio'];
+const TTS_ENGINES  = ['piper','xtts'];
 const AUDIO_MODES  = ['replace','voiceover'];
 
 // --- Cesty (data mimo přímý web přístup, chráněno .htaccess) -------------

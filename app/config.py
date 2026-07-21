@@ -75,9 +75,9 @@ DEFAULT_SOURCE = "auto"
 DEFAULT_TARGET = "cs-CZ"          # priorita: čeština
 
 # --- TTS ------------------------------------------------------------------
-# "piper" = lokální offline (výchozí, drží slib CPU/offline),
-# "voicestudio" = HTTP volání běžícího PZ Voice Studia (Chatterbox, klonování).
-TTS_ENGINE = os.environ.get("DAB_TTS_ENGINE", "piper")
+# Interní XTTS s klonováním původního hlasu je výchozí; Piper zůstává rychlá
+# alternativa pro počítače bez podporované GPU.
+TTS_ENGINE = os.environ.get("DAB_TTS_ENGINE", "xtts")
 
 PIPER_EXE_NAMES = ["piper.exe", "piper"]
 # Výchozí Piper hlas pro daný cílový jazyk. Stačí jméno (bez .onnx) – soubor
@@ -104,7 +104,8 @@ VOICESTUDIO_TIMEOUT = _env_int("DAB_VS_TIMEOUT", 600)
 # --- Dabing (mix & mux) ---------------------------------------------------
 # "replace"  = nahradit původní zvuk dabingem,
 # "voiceover"= dabing přes ztlumený originál (zachová hudbu/ruchy).
-AUDIO_MODE = os.environ.get("DAB_AUDIO_MODE", "replace")
+AUDIO_MODE = os.environ.get("DAB_AUDIO_MODE", "voiceover")
+BURN_SUBS = os.environ.get("DAB_BURN_SUBS", "1").strip().lower() not in ("0", "false", "no", "off")
 DUCK_DB = _env_float("DAB_DUCK_DB", -14.0)        # ztlumení originálu ve voiceover
 TTS_GAIN_DB = _env_float("DAB_TTS_GAIN_DB", 0.0)
 

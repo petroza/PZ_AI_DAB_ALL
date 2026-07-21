@@ -92,6 +92,15 @@ async function loadStatus() {
   }
   fillSelect($("source_lang"), s.source_languages, s.defaults.source);
   fillSelect($("target_lang"), s.target_languages, s.defaults.target);
+  if (!loadStatus.defaultsApplied) {
+    if ($("tts_engine")) $("tts_engine").value = s.tts.default || "xtts";
+    const audio = document.querySelector(`input[name=audio_mode][value="${s.defaults.audio_mode || "voiceover"}"]`);
+    if (audio) audio.checked = true;
+    if ($("burn_subs")) $("burn_subs").checked = s.defaults.burn_subs !== false;
+    loadStatus.defaultsApplied = true;
+    _syncAudioMode();
+    _fillVoiceList();
+  }
 
   const bits = [];
   bits.push(s.ffmpeg.ok ? "ffmpeg ✓" : "ffmpeg ✗");
@@ -111,6 +120,10 @@ async function loadStatus() {
   }
   bits.push(s.tts.piper.ok ? "Piper ✓" : "Piper ✗");
   if (s.tts.piper.ok && !s.tts.piper.cs_voice) bits.push("(chybí CZ hlas)");
+  if (s.tts.xtts) {
+    const loading = s.tts.xtts.ok && /načítá/i.test(s.tts.xtts.info || "");
+    bits.push(s.tts.xtts.ok ? (loading ? "XTTS načítá…" : "XTTS(CUDA) ✓") : "XTTS ✗");
+  }
   $("status").innerHTML = bits.map((b) =>
     `<span class="${b.includes('✗') ? 'bad' : 'ok'}">${b}</span>`).join(" · ");
   $("hint").textContent = s.ready
@@ -127,33 +140,44 @@ async function loadVoices() {
 }
 
 function _fillVoiceList() {
-  const dl = document.getElementById("voices-list");
-  if (!dl || !_voicesCache) return;
-  dl.innerHTML = "";
-  const engine = ($("tts_engine") || {}).value || "piper";
-  const src = engine === "piper" ? (_voicesCache.piper || [])
-            : engine === "xtts" ? (_voicesCache.xtts || [])
-            : engine.includes("voicestudio") || engine === "voicestudio"
-              ? (_voicesCache.voicestudio || [])
-            : [...(_voicesCache.piper || []), ...(_voicesCache.voicestudio || [])];
-  src.forEach(v => {
-    const id = typeof v === "string" ? v : (v.id || v.name || String(v));
-    if (!id || id === "[object Object]") return;
-    const o = document.createElement("option"); o.value = id; dl.appendChild(o);
-  });
   const voiceIn = $("voice");
-  if (voiceIn) {
-    voiceIn.placeholder = engine === "xtts"
-      ? "prázdné = klonovat původní hlas · nebo vyber hlas"
-      : "např. cs_CZ-jirka-medium";
+  if (!voiceIn || !_voicesCache) return;
+  const engine = ($("tts_engine") || {}).value || "piper";
+  const src = engine === "xtts" ? (_voicesCache.xtts || [])
+            : (_voicesCache.piper || []);
+  const previous = voiceIn.value;
+  const ids = src.map(v => typeof v === "string" ? v : (v.id || v.name || ""))
+                 .filter(Boolean);
+  voiceIn.innerHTML = "";
+  const add = (value, label) => {
+    const o = document.createElement("option"); o.value = value;
+    o.textContent = label; voiceIn.appendChild(o);
+  };
+  if (engine === "xtts") {
+    add("", "🎙 Klonovat původní hlas (výchozí)");
+    const women = new Set(["Daisy Studious", "Alison Dietlinde", "Gracie Wise", "Alexandra Hisakawa"]);
+    const men = new Set(["Damien Black", "Aaron Dreschner", "Baldur Sanjin", "Viktor Eka"]);
+    const ordered = ["Daisy Studious", "Damien Black", ...ids.filter(id => !["Daisy Studious", "Damien Black"].includes(id))];
+    [...new Set(ordered)].forEach(id => {
+      const label = id === "Daisy Studious" ? "👩 XTTS ženský hlas — doporučeno"
+                  : id === "Damien Black" ? "👨 XTTS mužský hlas — doporučeno"
+                  : women.has(id) ? `👩 ${id} — ženský`
+                  : men.has(id) ? `👨 ${id} — mužský`
+                  : id;
+      add(id, label);
+    });
+    voiceIn.value = ids.includes(previous) ? previous : "";
+  } else {
+    add("", "Automaticky podle cílového jazyka");
+    ids.forEach(id => add(id, id));
+    voiceIn.value = ids.includes(previous) ? previous : "";
   }
   const vHint = $("voice-hint");
   if (vHint) {
     vHint.textContent = engine === "xtts"
-      ? "prázdné = klon · Ž: Daisy, Alison, Gracie · M: Damien, Aaron, Baldur"
+      ? "klon původního hlasu, nebo stabilní ženský/mužský XTTS hlas"
       : "(volitelné)";
   }
-  // U XTTS nech prázdné (= klonovat originál); u Piperu napověz hlas jazyka.
   if (engine === "xtts") return;
   // auto-suggest default voice for target language if voice field is empty
   if (voiceIn && !voiceIn.value.trim()) {
@@ -164,6 +188,20 @@ function _fillVoiceList() {
     const match = ids.find(id => id.toLowerCase().startsWith(prefix.toLowerCase()));
     if (match) voiceIn.value = match;
   }
+}
+
+function _syncAudioMode() {
+  const selected = document.querySelector('input[name=audio_mode]:checked');
+  const subtitlesOnly = selected && selected.value === "subtitles";
+  const engine = $("tts_engine"), voice = $("voice"), play = $("voice-play");
+  if (engine) engine.disabled = subtitlesOnly;
+  if (voice) voice.disabled = subtitlesOnly;
+  if (play) play.disabled = subtitlesOnly;
+  if ($("burn_subs")) {
+    if (subtitlesOnly) $("burn_subs").checked = true;
+    $("burn_subs").disabled = subtitlesOnly;
+  }
+  if ($("start")) $("start").textContent = subtitlesOnly ? "Vytvořit video s českými titulky" : "Spustit dabing";
 }
 
 function _setPicked(msg, isErr) {
@@ -449,7 +487,7 @@ function jobCard(j) {
       <span class="jname" title="${escHtml(j.filename)}">${escHtml(j.filename)}</span>
       <span class="jstat">${st}${running ? " · " + j.progress + "%" + _elapsed(j.started_at || j.created_at) : ""}</span>
     </div>
-    <div class="jmeta">${dir} · ${j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}${metaExtra}</div>
+    <div class="jmeta">${dir} · ${j.audio_mode === "subtitles" ? "původní hlas · české titulky" : j.tts_engine}${j.audio_mode === "voiceover" ? " · voice-over" : ""}${metaExtra}</div>
     <div class="bar"><div class="fill" style="width:${j.progress}%"></div></div>
     ${err}
     <div class="jactions">
@@ -541,6 +579,22 @@ async function delJob(id) {
   refresh();
 }
 
+async function clearQueue() {
+  if (!confirm("Smazat všechny hotové a chybné zakázky ze seznamu?\n" +
+               "(Rozpracovaná zakázka zůstane.)")) return;
+  const btn = $("clear-queue");
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(api("/api/jobs/clear?scope=finished"), { method: "POST" });
+    if (!r.ok) { alert("Promazání selhalo (" + r.status + ")."); return; }
+    const d = await r.json();
+    _setPicked(`Promazáno: ${d.deleted} zakázek` +
+               (d.skipped ? ` · ${d.skipped} běží (ponecháno)` : ""), false);
+    setTimeout(() => { if ($("picked").textContent.startsWith("Promazáno")) _setPicked("", false); }, 3000);
+  } catch (e) { alert("Chyba spojení: " + e); }
+  finally { if (btn) btn.disabled = false; _lastJobsJson = ""; refresh(); }
+}
+
 // Delegace kliknutí — žádné inline onclick (XSS safe)
 $("jobs").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
@@ -563,6 +617,7 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) uploadFile(
 }));
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); });
 $("start").addEventListener("click", startDub);
+(function () { const b = $("clear-queue"); if (b) b.addEventListener("click", clearQueue); })();
 (function () { const b = $("server-btn"); if (b) b.addEventListener("click", dabSetServer); })();
 // Náhled hlasu (XTTS) — přehraje krátkou ukázku vybraného vestavěného hlasu.
 (function () {
@@ -583,6 +638,7 @@ $("start").addEventListener("click", startDub);
   });
 })();
 $("tts_engine").addEventListener("change", _fillVoiceList);
+document.querySelectorAll('input[name=audio_mode]').forEach(el => el.addEventListener("change", _syncAudioMode));
 $("target_lang").addEventListener("change", () => { $("voice").value = ""; _fillVoiceList(); });
 $("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });
 $("aeclose").addEventListener("click", () => $("aebox").classList.add("hidden"));
@@ -592,6 +648,7 @@ $("ae-dl").addEventListener("click", _aeDownload);
 
 loadStatus();
 loadVoices();
+_syncAudioMode();
 refresh().then(r => _scheduleRefresh(r ? 1500 : 5000));
 setInterval(loadStatus, 15000);
 

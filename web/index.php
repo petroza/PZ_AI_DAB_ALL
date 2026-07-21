@@ -45,9 +45,8 @@
     <div class="grid grid-voice">
       <label>Hlasový engine
         <select id="tts_engine">
-          <option value="piper">Piper — offline (výchozí)</option>
-          <option value="xtts">XTTS — klonuje hlas (GPU)</option>
-          <option value="voicestudio">PZ Voice Studio</option>
+          <option value="piper">Piper — offline</option>
+          <option value="xtts" selected>XTTS — klonuje hlas (GPU)</option>
         </select>
       </label>
       <label><span class="cap">Hlas <span id="voice-hint" class="hint">(volitelné)</span></span>
@@ -57,12 +56,13 @@
     <div class="row">
       <fieldset class="seg">
         <legend>Zvuk originálu</legend>
-        <label class="rad"><input type="radio" name="audio_mode" value="replace" checked> Nahradit dabingem</label>
-        <label class="rad"><input type="radio" name="audio_mode" value="voiceover"> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="replace"> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="voiceover" checked> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="subtitles"> Ponechat původní hlas, jen české titulky</label>
       </fieldset>
       <fieldset class="seg">
         <legend>Titulky a text</legend>
-        <label class="chk"><input id="burn_subs" type="checkbox"> Zapéct titulky do videa</label>
+        <label class="chk"><input id="burn_subs" type="checkbox" checked> Zapéct titulky do videa</label>
         <label id="preset-wrap" class="chk hidden">Styl titulků
           <select id="subs_preset">
             <option value="classic">16:9 klasické (dole)</option>
@@ -165,8 +165,7 @@
         <label>Hlasový engine
           <select id="rd-engine">
             <option value="piper">Piper — offline</option>
-            <option value="xtts">XTTS — klonuje hlas (GPU)</option>
-            <option value="voicestudio">PZ Voice Studio</option>
+            <option value="xtts" selected>XTTS — klonuje hlas (GPU)</option>
           </select>
         </label>
         <label><span class="cap">Hlas <span id="rd-voice-hint" class="hint"></span></span>
@@ -183,10 +182,10 @@
       </div>
       <fieldset class="seg" style="margin-top:12px">
         <legend>Zvuk originálu</legend>
-        <label class="rad"><input type="radio" name="rd_audio" value="replace" checked> Nahradit dabingem</label>
-        <label class="rad"><input type="radio" name="rd_audio" value="voiceover"> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="rd_audio" value="replace"> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="rd_audio" value="voiceover" checked> Voice-over přes ztlumený originál</label>
       </fieldset>
-      <label class="chk" style="margin-top:10px"><input id="rd-burn" type="checkbox"> Zapéct titulky do videa</label>
+      <label class="chk" style="margin-top:10px"><input id="rd-burn" type="checkbox" checked> Zapéct titulky do videa</label>
       <label id="rd-preset-wrap" class="chk hidden">Styl titulků
         <select id="rd-preset">
           <option value="classic">16:9 klasické (dole)</option>

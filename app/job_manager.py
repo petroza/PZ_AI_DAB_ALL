@@ -38,8 +38,8 @@ class DubJob:
     target_lang: str = config.DEFAULT_TARGET
     tts_engine: str = config.TTS_ENGINE
     voice: Optional[str] = None
-    audio_mode: str = config.AUDIO_MODE          # replace | voiceover
-    burn_subs: bool = False
+    audio_mode: str = config.AUDIO_MODE          # replace | voiceover | subtitles
+    burn_subs: bool = config.BURN_SUBS
     subs_preset: str = "classic"                 # classic | reels | reels_box | word | karaoke…
     subs_chars: int = 0                          # max znaků/řádek (0 = auto dle šířky videa)
     subs_maxlines: int = 2                       # 1 nebo 2 řádky
@@ -189,6 +189,34 @@ class JobManager:
                     continue
         jobs.sort(key=lambda j: j.get("created_at", ""), reverse=True)
         return jobs
+
+    def clear(self, scope: str = "finished") -> dict:
+        """Hromadně promaže frontu. Vrací {'deleted': N, 'skipped': M}.
+
+        scope:
+          'finished' → jen dokončené a chybné zakázky (done, error),
+          'all'      → navíc i čekající nespuštěné (nahráno, ještě neběží).
+        Aktivně běžící zakázka (rozpracovaná pipeline) se NIKDY nesmaže —
+        smazání jejích souborů za běhu by pipeline rozbilo; taková se počítá
+        do 'skipped'.
+        """
+        with self._lock:
+            ids = [f.stem for f in config.JOBS_DIR.glob("*.json")]
+        deleted = skipped = 0
+        for jid in ids:
+            job = self.get(jid)
+            if not job:
+                continue
+            finished = job.status in ("done", "error")
+            idle_queued = job.status == "queued" and not job.started_at
+            active = not finished and not idle_queued   # rozpracovaná / zařazená pipeline
+            remove = finished if scope == "finished" else (finished or idle_queued)
+            if remove:
+                if self.delete(jid):
+                    deleted += 1
+            elif active:
+                skipped += 1
+        return {"deleted": deleted, "skipped": skipped}
 
     def delete(self, job_id: str) -> bool:
         with self._lock:

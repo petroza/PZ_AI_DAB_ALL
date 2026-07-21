@@ -202,11 +202,13 @@ def _subtitle_cues(segs, max_chars: int = 84, max_dur: float = 5.5,
 
 
 def _burn_into(src_video, out_segs, dst_video, work, preset,
-               u_chars, u_lines, u_size, log=None, progress_cb=None):
+               u_chars, u_lines, u_size, log=None, progress_cb=None,
+               preserve_audio=False):
     """Zapéct titulky (z out_segs) do src_video → dst_video. Jediné místo s burn
     logikou (volá ho run_dub i dodatečné zapečení burn_existing_video)."""
     vw, vh = ffmpeg_tools.get_video_size(src_video, log)
     bopts = _burn_preset_opts(preset, vw, vh)
+    bopts["audio_copy"] = bool(preserve_audio)
     if u_lines in (1, 2):
         bopts["maxlines"] = u_lines
     _SZ = {"small": 0.035, "medium": 0.046, "large": 0.062, "xl": 0.08}
@@ -335,6 +337,11 @@ def _prepare(jobs, job_id, work, upload, target, log, prog):
     if same_lang:
         log(f"Zdroj i cíl = {target.split('-')[0]} → přeskakuji překlad (jen přepis)")
     n = len(chunks) or 1
+    batch_translations = None
+    if not same_lang:
+        batch_translations = asr_engine.translate_segments(
+            chunks, target, log, source=effective_src,
+            translator=getattr(job, "translator", "local"))
     out_segs = []
     for i, s in enumerate(chunks):
         txt = (s.get("text") or "").strip()
@@ -347,7 +354,9 @@ def _prepare(jobs, job_id, work, upload, target, log, prog):
         # (~14 zn./s je přirozené české tempo s mírným zrychlením). Drží
         # překlad dost krátký, aby se řeč nemusela drtit časem.
         budget = int((end - start) * 14) if (end - start) > 0 else 0
-        if txt and not same_lang:
+        if batch_translations is not None:
+            tr = batch_translations[i]
+        elif txt and not same_lang:
             tr = asr_engine.translate_text(txt, target, log, source=effective_src,
                                            max_chars=budget,
                                            translator=getattr(job, "translator", "local"))
@@ -465,6 +474,29 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
 
         _write_target_outputs(jobs, job_id, job, target, out_segs)
 
+        # Režim pouze titulky: původní zvuk zůstane zachovaný, TTS a mix se vůbec
+        # nespouštějí. Český překlad se zapeče přímo do původního videa.
+        if job.audio_mode == "subtitles":
+            if not is_video:
+                raise RuntimeError("Režim pouze titulky vyžaduje video, ne samostatný zvuk.")
+            prog("burning", 82)
+            out_video = config.OUTPUTS_DIR / f"{job_id}.subtitled.mp4"
+            _burn_into(upload, out_segs, out_video, work,
+                       getattr(job, "subs_preset", "classic"),
+                       int(getattr(job, "subs_chars", 0) or 0),
+                       int(getattr(job, "subs_maxlines", 0) or 0),
+                       str(getattr(job, "subs_size", "") or ""),
+                       log=log,
+                       progress_cb=lambda pct: prog("burning", 82 + int(pct * 0.17)),
+                       preserve_audio=True)
+            if not out_video.is_file() or out_video.stat().st_size == 0:
+                raise RuntimeError("Vytvoření videa s titulky selhalo.")
+            jobs.update(job_id, output_video=str(out_video), burn_subs=True)
+            prog("done", 100)
+            log("HOTOVO: původní zvuk zachován, přidány české titulky.")
+            _cleanup(work)
+            return
+
         # 4) TTS — z každého přeloženého segmentu jeden klip
         prog("synthesizing", 58)
         backend = get_backend(job.tts_engine)
@@ -479,14 +511,24 @@ def run_dub(jobs, job_id: str, segments=None) -> None:
         # Klonuj původního mluvčího JEN když uživatel nezadal konkrétní hlas.
         # Když zvolil vestavěný hlas (jméno), předá se beze změny.
         if getattr(backend, "needs_reference", False) and not tts_voice:
-            # Kvalitní 24 kHz reference pro klonování (lepší než 16 kHz ASR wav).
+            # Krátká, čistá 24kHz reference. Celá stopa obsahuje pauzy, ruchy a
+            # proměnlivou hlasitost, což zhoršuje českou artikulaci klonu.
             ref = work / "voice_ref.wav"
             try:
-                ff.extract_audio(upload, ref, 24000, log=log)
+                # Střední část bývá stabilnější než úvod videa (méně nádechů,
+                # náběhů hudby a změn hlasitosti). Testy klonu ukázaly nejlepší
+                # českou artikulaci na souvislém osmivteřinovém vzorku.
+                ref_start = min(8.0, max(0.4, dur * 0.20))
+                ref_len = min(8.0, max(6.0, dur - ref_start - 0.2))
+                ff.run(["-ss", f"{ref_start:.2f}", "-t", f"{ref_len:.2f}",
+                        "-i", str(upload), "-vn",
+                        "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+                        str(ref)], log=log)
                 tts_voice = str(ref)
             except Exception:
                 tts_voice = str(wav16)
-            log(f"Klonování hlasu z původního zvuku (reference {Path(tts_voice).name})")
+            log(f"Klonování hlasu z čisté reference {Path(tts_voice).name} "
+                f"({ref_len:.1f} s, 24 kHz)")
         elif tts_voice:
             log(f"Hlas: {tts_voice}")
         clips = []

@@ -58,6 +58,11 @@ def fit_clip(in_wav, out_wav, target_dur: float, mode: Optional[str] = None,
         return ff.duration(out_wav)
 
     tempo = natural / target_dur          # >1 => klip je delší než slot => zrychlit
+    # Kratší klip nikdy nezpomaluj. Umělé natahování poškozuje artikulaci XTTS
+    # a zní nepřirozeně; chybějící čas bezpečně doplní mixer tichem.
+    if tempo <= 1.0:
+        ff.to_canonical(in_wav, out_wav, rate, log=log)
+        return ff.duration(out_wav)
     tempo = max(config.MIN_TEMPO, min(config.MAX_TEMPO, tempo))
     if abs(tempo - 1.0) < 0.02:           # rozdíl zanedbatelný
         ff.to_canonical(in_wav, out_wav, rate, log=log)
