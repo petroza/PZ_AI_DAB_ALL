@@ -46,7 +46,12 @@ nadabované `*.dubbed.mp3`.
 
 ### 1) ASR — volitelné (app funguje i bez parakeet)
 
-**Možnost A — parakeet.cpp** (vyšší přesnost, Windows): → `tools\parakeet\` a `models\`
+> **Kvalita přepisu:** parakeet.cpp s modelem `tdt-0.6b-v3-q8_0.gguf` je na češtině
+> výrazně přesnější než fallback faster-whisper `medium`. Bez modelu se app tiše
+> přepne na whisper a titulky/dabing jsou znatelně horší — proto **možnost A**.
+> V logu jobu je vidět, co se použilo: `ASR start | model=…` + `BACKEND`.
+
+**Možnost A — parakeet.cpp** (vyšší přesnost, Windows, DOPORUČENO): → `tools\parakeet\` a `models\`
 - `parakeet-cli.exe` z <https://github.com/mudler/parakeet.cpp/releases> → `tools\parakeet\`
 - jeden `.gguf` model z <https://huggingface.co/mudler/parakeet-cpp-gguf>
   (doporučeno `tdt-0.6b-v3-q8_0.gguf`, 25 jazyků) → `models\`
