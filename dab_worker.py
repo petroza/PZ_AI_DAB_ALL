@@ -6,8 +6,8 @@ video, nadabuje ho LOKÁLNĚ stávající pipeline (app/pipeline.py) a nahraje
 výsledek zpět. Díky tomu jde dabovat z mobilu odkudkoliv — web mluví jen
 s Forpsi, tento worker si úkoly vyzvedává sám.
 
-Spouštěj přes START_DABWORKER.bat (aktivuje .venv). Nastavení ve worker_config.json.
-Pro XTTS hlas musí běžet i START_XTTS.bat.
+Spouštěj přes tools\start\START_DABWORKER.bat (aktivuje .venv). Nastavení ve worker_config.json.
+Pro XTTS hlas musí běžet i tools\start\START_XTTS.bat.
 """
 from __future__ import annotations
 
@@ -319,7 +319,7 @@ def main():
     print("=" * 56)
     print(" PZ AI DAB ALL — relay worker")
     print(" relay:", BASE)
-    print(" (dabuje z mobilu/webu; pro XTTS spusť i START_XTTS.bat)")
+    print(" (dabuje z mobilu/webu; pro XTTS spusť i tools\start\START_XTTS.bat)")
     print("=" * 56)
     print("Čekám na zakázky (Ctrl+C ukončí)…")
     while True:

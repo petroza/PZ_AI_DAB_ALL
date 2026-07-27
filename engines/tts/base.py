@@ -31,10 +31,23 @@ class VoiceClip:
     fitted_wav: Optional[str] = None   # po time-stretchi na délku slotu
     natural_dur: float = 0.0           # délka surového klipu
     fitted_dur: float = 0.0            # délka po zarovnání
+    slot_ext: float = 0.0              # slot prodloužený do následující pauzy
+    words: list = field(default_factory=list)   # slova s časy UVNITŘ klipu (z ASR)
+    real_start: float = 0.0            # kdy klip opravdu zazní v hotové stopě
 
     @property
     def slot(self) -> float:
         return max(0.0, self.end - self.start)
+
+    @property
+    def fit_slot(self) -> float:
+        """Čas, který má řeč reálně k dispozici — slot + ticho za ním.
+
+        Když po replice následuje ve videu pauza, je přirozenější domluvit do ní
+        než větu stlačit. Mixer je sekvenční, takže přesah do vlastní pauzy
+        neposune následující repliku.
+        """
+        return max(self.slot, self.slot_ext)
 
 
 def popen_kwargs() -> dict:

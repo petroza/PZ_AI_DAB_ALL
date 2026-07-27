@@ -41,6 +41,11 @@ case 'upload_init':
         $preset = 'classic';
     $trans = (string)($_POST['translator'] ?? 'local');
     if (!in_array($trans, ['local','gemma31b','google','deepl'], true)) $trans = 'local';
+    // vzhled titulků už při zakládání zakázky (dřív šel nastavit až v editoru)
+    $sChars = max(0, min(60, (int)($_POST['subs_chars'] ?? 0)));
+    $sLines = ((int)($_POST['subs_maxlines'] ?? 2) === 1) ? 1 : 2;
+    $sSize  = (string)($_POST['subs_size'] ?? '');
+    if (!in_array($sSize, ['', 'small', 'medium', 'large', 'xl'], true)) $sSize = '';
     $id = new_id();
     @file_put_contents(UP_DIR . '/' . $id . '.part', '');
     $job = [
@@ -48,7 +53,7 @@ case 'upload_init':
         'source_lang' => $sl, 'target_lang' => $tl, 'tts_engine' => $eng,
         'voice' => trim((string)($_POST['voice'] ?? '')),
         'audio_mode' => $am, 'subs_preset' => $preset, 'translator' => $trans,
-        'subs_chars' => 0, 'subs_maxlines' => 2, 'subs_size' => '',
+        'subs_chars' => $sChars, 'subs_maxlines' => $sLines, 'subs_size' => $sSize,
         'burn_subs' => ((string)($_POST['burn_subs'] ?? '0')) === '1',
         'review_text' => ((string)($_POST['review_text'] ?? '0')) === '1',
         'llm_correct' => ((string)($_POST['llm_correct'] ?? '1')) === '1',

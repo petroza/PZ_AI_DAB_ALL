@@ -644,6 +644,149 @@ def translate_text(text: str, target: str, log: LogFn = None, source: str = "aut
     return llm_translate(text, target, log, source, max_chars, model=model)
 
 
+def condense_text(text: str, max_chars: int, log: LogFn = None,
+                  model: Optional[str] = None) -> str:
+    """Zkrátí hotový překlad tak, aby se dal vyslovit za čas repliky.
+
+    Překladač dostane rozpočet znaků v promptu, ale nedodrží ho spolehlivě —
+    a každý přetečený znak pak musí dohnat time-stretch, který řeč deformuje.
+    Tohle je záchranná brzda pro VÝRAZNÉ přetečení: jeden cílený průchod
+    „řekni totéž kratšeji“.
+
+    POZOR – volat jen na opravdu dlouhé repliky. Ověřeno, že gemma3:12b při
+    agresivním zkracování rozbíjí smysl i gramatiku („Média zatím mlčí. U mého
+    domu výbuch.“ → „Mlčím média, výbuch u domu.“) nebo zahodí klíčové sdělení
+    („Protivzdušná obrana zřejmě zasáhla…“ → „Zasáhlo to.“). Proto se výsledek
+    přijímá jen tehdy, když je pořád dost dlouhý na to, aby nesl obsah; jinak
+    (i při chybě Ollamy) se vrací původní text a délku dorovná time-stretch.
+    """
+    text = (text or "").strip()
+    if not text or max_chars <= 0 or len(text) <= max_chars:
+        return text
+    prompt = (
+        f"Zkrať následující českou větu na nejvýše {max_chars} znaků. "
+        "Je to replika pro dabing, musí se stihnout vyslovit. "
+        "ZKRAŤ CO NEJMÉNĚ – jen tolik, aby se vešla. "
+        "MUSÍŠ zachovat všechna fakta (kdo, co, kde) i vlastní jména a odborné "
+        "názvy; vypusť pouze výplňková slova a opisy. Výsledek musí být "
+        "gramaticky správná česká věta ve stejném tónu. "
+        "Nepřidávej nic nového, nepiš zkratky ani symboly. "
+        "Vrať POUZE zkrácenou větu bez uvozovek a komentáře.\n\n" + text)
+    try:
+        import requests
+        r = requests.post(
+            config.OLLAMA_URL,
+            json={"model": (model or config.OLLAMA_MODEL), "prompt": prompt,
+                  "stream": False, "keep_alive": "30m",
+                  "options": {"temperature": 0.0, "num_predict": 256}},
+            timeout=config.LLM_TIMEOUT,
+        )
+        r.raise_for_status()
+        out = (r.json().get("response") or "").strip().strip('"').strip("`").strip()
+        # Přijmi jen mírné zkrácení. Když model uřízl víc než třetinu rozpočtu,
+        # skoro jistě zahodil obsah — to je horší než trochu rychlejší řeč.
+        if out and len(out) < len(text):
+            if len(out) >= 0.65 * max_chars:
+                _log(log, f"  zkráceno {len(text)} → {len(out)} zn. (rozpočet {max_chars})")
+                return out
+            _log(log, f"  zkrácení zamítnuto ({len(text)} → {len(out)} zn., "
+                      f"rozpočet {max_chars}) – ztratilo by obsah, nechávám původní")
+    except Exception as e:
+        _log(log, f"  zkrácení repliky selhalo ({e}) – nechávám delší text")
+    return text
+
+
+def translate_segments(segments: list, target: str, log: LogFn = None,
+                       source: str = "auto", translator: str = "local") -> "list[str] | None":
+    """Přeloží navazující titulkové bloky společně, aby LLM viděl kontext.
+
+    Samostatný překlad krátkých fragmentů často vytvoří gramaticky správnou, ale
+    významově kostrbatou češtinu. Dávkový prompt zachová přesný počet bloků i
+    jejich časový rozpočet. Při jakékoli pochybnosti vrací None a volající použije
+    osvědčený překlad po jednotlivých segmentech.
+    """
+    if not segments or (translator or "local").lower() not in ("local", "gemma31b", "gemma4:31b"):
+        return None
+    tname = _TRANSLATE_NAMES.get(target, target)
+    payload = []
+    for i, seg in enumerate(segments):
+        text = (seg.get("text") or "").strip()
+        duration = max(0.0, float(seg.get("end") or 0.0) - float(seg.get("start") or 0.0))
+        # Rozpočet znaků primárně od volajícího (dabing ho počítá z MĚŘENÉ
+        # rychlosti TTS a z pauz mezi replikami); jinak hrubý odhad z délky.
+        budget = int(seg.get("max_chars") or 0) or int(duration * 14)
+        payload.append({"id": i, "max_chars": max(20, budget), "text": text})
+    prompt = (
+        f"Jsi profesionální překladatel a dialogový režisér. Přelož souvislou promluvu "
+        f"z jazyka {source} do {tname}. Všechny bloky tvoří jeden navazující kontext, "
+        "proto oprav přirozený slovosled a návaznost vět. Zachovej význam, čísla vypiš "
+        "slovy a nic nepřidávej. Každý překlad zkrať přibližně na max_chars, aby se dal "
+        "přirozeně namluvit v daném čase. Vrať POUZE platný JSON objekt ve tvaru "
+        "{\"translations\":[\"první překlad\",\"druhý překlad\"]} ve stejném pořadí "
+        "a se stejným počtem prvků; žádný Markdown ani komentář.\n\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
+    model = "gemma4:31b" if (translator or "").lower() in ("gemma31b", "gemma4:31b") else config.OLLAMA_MODEL
+    try:
+        import requests
+        r = requests.post(
+            config.OLLAMA_URL,
+            json={"model": model, "prompt": prompt, "stream": False, "keep_alive": "30m",
+                  "format": "json", "options": {"temperature": 0.0, "num_predict": 1536}},
+            timeout=max(config.LLM_TIMEOUT, 120),
+        )
+        r.raise_for_status()
+        raw = (r.json().get("response") or "").strip().strip("`")
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            picked = data.get("translations") or data.get("items") or data.get("result")
+            if picked is None and data and all(str(k).isdigit() for k in data):
+                picked = [data[k] for k in sorted(data, key=lambda k: int(k))]
+            data = picked
+        if not isinstance(data, list) or len(data) != len(payload):
+            raise ValueError("LLM nevrátil správný počet překladových bloků")
+        out = [str(x.get("text") or x.get("translation") or "").strip()
+               if isinstance(x, dict) else str(x).strip() for x in data]
+        if any(not x or _seems_untranslated(x, payload[i]["text"], target)
+               for i, x in enumerate(out)):
+            raise ValueError("některý blok zůstal nepřeložený nebo prázdný")
+        _log(log, f"Kontextový překlad: {len(out)} navazujících bloků v jednom průchodu")
+        return out
+    except Exception as e:
+        _log(log, f"Dávkový překlad se nepodařil ({e}) → překládám s kontextem po blocích")
+        context = "\n".join(f"{i + 1}. {item['text']}" for i, item in enumerate(payload))
+        contextual = []
+        try:
+            import requests
+            for i, item in enumerate(payload):
+                one_prompt = (
+                    f"Níže je souvislá promluva v jazyce {source}. Přelož POUZE blok "
+                    f"číslo {i + 1} do přirozené mluvené {tname}, ale použij celý text "
+                    "jako kontext. Oprav kostrbaté fragmenty vzniklé automatickým přepisem, "
+                    "neměň však význam. Překlad musí plynule navazovat na sousední bloky, "
+                    f"vejít se přibližně do {item['max_chars']} znaků a čísla musí být slovy. "
+                    "Vrať pouze český překlad daného bloku bez uvozovek a komentáře.\n\n"
+                    f"CELÝ KONTEXT:\n{context}\n\nPŘELOŽ BLOK {i + 1}:\n{item['text']}"
+                )
+                rr = requests.post(
+                    config.OLLAMA_URL,
+                    json={"model": model, "prompt": one_prompt, "stream": False,
+                          "keep_alive": "30m", "options": {"temperature": 0.0,
+                                                               "num_predict": 256}},
+                    timeout=max(config.LLM_TIMEOUT, 120),
+                )
+                rr.raise_for_status()
+                value = (rr.json().get("response") or "").strip().strip('"').strip("`").strip()
+                if not value or _seems_untranslated(value, item["text"], target):
+                    raise ValueError(f"blok {i + 1} je prázdný nebo nepřeložený")
+                contextual.append(value)
+            _log(log, f"Kontextový překlad: {len(contextual)} bloků s návazností")
+            return contextual
+        except Exception as inner:
+            _log(log, f"Kontextový překlad selhal ({inner}) → překládám standardně")
+            return None
+
+
 def _llm_correct_chunk(text: str, lang: Optional[str] = None) -> str:
     """Jeden blok textu -> Ollama. Vždy bezpečný fallback na původní text."""
     text = (text or "").strip()

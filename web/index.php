@@ -45,9 +45,8 @@
     <div class="grid grid-voice">
       <label>Hlasový engine
         <select id="tts_engine">
-          <option value="piper">Piper — offline (výchozí)</option>
-          <option value="xtts">XTTS — klonuje hlas (GPU)</option>
-          <option value="voicestudio">PZ Voice Studio</option>
+          <option value="piper">Piper — offline</option>
+          <option value="xtts" selected>XTTS — klonuje hlas (GPU)</option>
         </select>
       </label>
       <label><span class="cap">Hlas <span id="voice-hint" class="hint">(volitelné)</span></span>
@@ -57,12 +56,13 @@
     <div class="row">
       <fieldset class="seg">
         <legend>Zvuk originálu</legend>
-        <label class="rad"><input type="radio" name="audio_mode" value="replace" checked> Nahradit dabingem</label>
-        <label class="rad"><input type="radio" name="audio_mode" value="voiceover"> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="replace"> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="voiceover" checked> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="audio_mode" value="subtitles"> Ponechat původní hlas, jen české titulky</label>
       </fieldset>
       <fieldset class="seg">
         <legend>Titulky a text</legend>
-        <label class="chk"><input id="burn_subs" type="checkbox"> Zapéct titulky do videa</label>
+        <label class="chk"><input id="burn_subs" type="checkbox" checked> Zapéct titulky do videa</label>
         <label id="preset-wrap" class="chk hidden">Styl titulků
           <select id="subs_preset">
             <option value="classic">16:9 klasické (dole)</option>
@@ -72,6 +72,29 @@
             <option value="karaoke">🎤 Karaoke — aktivní slovo žlutě</option>
             <option value="karaoke_green">🎤 Karaoke — aktivní slovo zeleně</option>
             <option value="karaoke_box">🎤 Karaoke v boxu (hype)</option>
+          </select>
+        </label>
+        <label id="chars-wrap" class="chk hidden">Znaků na řádek
+          <select id="subs_chars">
+            <option value="0">Auto (dle šířky videa)</option>
+            <option value="12">12</option><option value="16">16</option>
+            <option value="20">20</option><option value="24">24</option>
+            <option value="30">30</option><option value="40">40</option>
+          </select>
+        </label>
+        <label id="lines-wrap" class="chk hidden">Řádky titulku
+          <select id="subs_maxlines">
+            <option value="2" selected>2 řádky</option>
+            <option value="1">1 řádek</option>
+          </select>
+        </label>
+        <label id="size-wrap" class="chk hidden">Velikost písma
+          <select id="subs_size">
+            <option value="">Auto</option>
+            <option value="small">Malé</option>
+            <option value="medium">Střední</option>
+            <option value="large">Velké</option>
+            <option value="xl">Obří</option>
           </select>
         </label>
         <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>
@@ -165,8 +188,7 @@
         <label>Hlasový engine
           <select id="rd-engine">
             <option value="piper">Piper — offline</option>
-            <option value="xtts">XTTS — klonuje hlas (GPU)</option>
-            <option value="voicestudio">PZ Voice Studio</option>
+            <option value="xtts" selected>XTTS — klonuje hlas (GPU)</option>
           </select>
         </label>
         <label><span class="cap">Hlas <span id="rd-voice-hint" class="hint"></span></span>
@@ -183,10 +205,10 @@
       </div>
       <fieldset class="seg" style="margin-top:12px">
         <legend>Zvuk originálu</legend>
-        <label class="rad"><input type="radio" name="rd_audio" value="replace" checked> Nahradit dabingem</label>
-        <label class="rad"><input type="radio" name="rd_audio" value="voiceover"> Voice-over přes ztlumený originál</label>
+        <label class="rad"><input type="radio" name="rd_audio" value="replace"> Nahradit dabingem</label>
+        <label class="rad"><input type="radio" name="rd_audio" value="voiceover" checked> Voice-over přes ztlumený originál</label>
       </fieldset>
-      <label class="chk" style="margin-top:10px"><input id="rd-burn" type="checkbox"> Zapéct titulky do videa</label>
+      <label class="chk" style="margin-top:10px"><input id="rd-burn" type="checkbox" checked> Zapéct titulky do videa</label>
       <label id="rd-preset-wrap" class="chk hidden">Styl titulků
         <select id="rd-preset">
           <option value="classic">16:9 klasické (dole)</option>
@@ -207,6 +229,6 @@
   </div>
 </div>
 
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

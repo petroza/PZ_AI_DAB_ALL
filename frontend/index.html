@@ -4,131 +4,265 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PZ AI DAB ALL — automatický dabing</title>
-<script>!function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)}();</script>
-<link rel="stylesheet" href="style.css">
+<script>!function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)}();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
+
+<!-- ---------- levý panel ---------- -->
+<aside class="side">
+  <div class="side-brand">
+    <span class="side-logo"><i data-lucide="waves"></i></span>
+    <span class="side-name">PZ·DAB ALL<small>DUBBING STUDIO</small></span>
+  </div>
+  <nav class="side-nav">
+    <button class="navi active" data-goto="panel-input"><i data-lucide="clapperboard"></i> Studio</button>
+    <button class="navi" data-goto="panel-jobs"><i data-lucide="list-checks"></i> Zakázky <span id="nav-jobs-count" class="navi-badge hidden">0</span></button>
+    <button class="navi" data-goto="grp-voice"><i data-lucide="mic-2"></i> Hlasy</button>
+    <button class="navi" data-goto="grp-subs"><i data-lucide="captions"></i> Titulky</button>
+    <button class="navi" data-ae="1"><i data-lucide="subtitles"></i> Editor titulků</button>
+    <button class="navi" id="server-btn"><i data-lucide="settings-2"></i> Nastavení</button>
+  </nav>
+  <div class="worker">
+    <div class="worker-t">WORKER <span id="worker-dot" class="dot">● offline</span></div>
+    <div id="worker-url" class="worker-url">127.0.0.1:8790</div>
+    <div class="worker-stats">
+      <div class="wstat"><b id="w-run">0</b><span>BĚŽÍ</span></div>
+      <div class="wstat"><b id="w-queue">0</b><span>FRONTA</span></div>
+      <div class="wstat"><b id="w-total">0</b><span>CELKEM</span></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ---------- horní lišta ---------- -->
 <header class="top">
-  <div class="brand"><span class="logo">🎙️</span> PZ&nbsp;AI&nbsp;<b>DAB&nbsp;ALL</b></div>
+  <div class="top-title">
+    <h1>Automatický dabing<span>/studio</span></h1>
+    <p>Přepis → překlad → klonovaný hlas → titulky. Vše lokálně na tvém stroji.</p>
+  </div>
   <div class="top-right">
-    <button id="server-btn" class="theme-btn" title="Adresa workeru (běží na tvém PC)">🖥️</button>
-    <button id="theme-btn" class="theme-btn" title="Přepnout světlý/tmavý režim">🌙</button>
     <div id="status" class="status">Zjišťuji stav…</div>
+    <button id="theme-btn" class="icon-btn" title="Přepnout světlý/tmavý režim"><i data-lucide="moon"></i></button>
   </div>
 </header>
 
 <main>
-  <section class="panel">
-    <h2>1 · Vstup</h2>
-    <div id="drop" class="drop">
-      <input id="file" type="file" hidden
-             accept="video/*,audio/*,.mp4,.mkv,.mov,.webm,.avi,.m4v,.mp3,.wav,.m4a">
-      <p class="drop-main">Přetáhni sem video&nbsp;/&nbsp;audio</p>
-      <p class="drop-sub">nebo klikni a vyber · MP4, MKV, MOV, WEBM, AVI, MP3, WAV…</p>
-      <p id="picked" class="picked"></p>
-      <div id="upbar" class="bar hidden" style="margin-top:8px">
-        <div id="upbar-fill" class="fill" style="width:0%"></div>
-      </div>
+  <div class="col-main">
+    <!-- statistické dlaždice -->
+    <div class="stats">
+      <div class="stat"><span class="stat-i"><i data-lucide="activity"></i></span><b id="st-run">0</b><span class="stat-l">BĚŽÍ</span></div>
+      <div class="stat"><span class="stat-i"><i data-lucide="loader-circle"></i></span><b id="st-queue">0</b><span class="stat-l">VE FRONTĚ</span></div>
+      <div class="stat ok"><span class="stat-i"><i data-lucide="circle-check"></i></span><b id="st-done">0</b><span class="stat-l">HOTOVO</span></div>
+      <div class="stat bad"><span class="stat-i"><i data-lucide="radio"></i></span><b id="st-err">0</b><span class="stat-l">CHYBY</span></div>
     </div>
-  </section>
 
-  <section class="panel">
-    <h2>2 · Nastavení dabingu</h2>
-    <div class="grid">
-      <label>Zdrojový jazyk
-        <select id="source_lang"></select>
-      </label>
-      <label>Cílový jazyk
-        <select id="target_lang"></select>
-      </label>
-      <label>Hlasový engine
-        <select id="tts_engine">
-          <option value="piper">Piper — lokální, offline (výchozí)</option>
-          <option value="xtts">XTTS — kvalitní, klonuje původní hlas (GPU)</option>
-          <option value="voicestudio">PZ Voice Studio — Chatterbox / klonování</option>
-        </select>
-      </label>
-      <label>Hlas <span id="voice-hint" class="hint">(volitelné)</span>
-        <span class="voice-row" style="display:flex;gap:6px;align-items:center">
-          <input id="voice" type="text" list="voices-list" placeholder="např. cs_CZ-jirka-medium" style="flex:1">
-          <button id="voice-play" type="button" title="Přehrát ukázku vybraného hlasu (XTTS)" style="flex:0 0 auto;cursor:pointer">🔊</button>
+    <section class="panel" id="panel-input">
+      <div class="phead">
+        <span class="step">1</span>
+        <div class="phead-t"><h2>Vstup</h2><p>Přetáhni soubor nebo klikni</p></div>
+      </div>
+      <div id="drop" class="drop">
+        <input id="file" type="file" hidden
+               accept="video/*,audio/*,.mp4,.mkv,.mov,.webm,.avi,.m4v,.mp3,.wav,.m4a">
+        <div class="drop-ico"><i data-lucide="upload"></i></div>
+        <p class="drop-main">Přetáhni video / audio</p>
+        <p class="drop-sub">MP4 · MKV · MOV · WEBM · AVI · MP3 · WAV · M4A</p>
+        <p id="picked" class="picked"></p>
+        <div id="upbar" class="bar hidden"><div id="upbar-fill" class="fill" style="width:0%"></div></div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-setup">
+      <div class="phead">
+        <span class="step">2</span>
+        <div class="phead-t"><h2>Nastavení dabingu</h2><p>Jazyk · hlas · audio · titulky</p></div>
+      </div>
+
+      <div class="fgroup">
+        <div class="fgroup-t"><i data-lucide="languages"></i> JAZYK A PŘEKLAD</div>
+        <div class="fgrid">
+          <label>Zdrojový jazyk <select id="source_lang"></select></label>
+          <label>Cílový jazyk <select id="target_lang"></select></label>
+        </div>
+      </div>
+
+      <div class="fgroup" id="grp-voice">
+        <div class="fgroup-t"><i data-lucide="mic-2"></i> HLAS</div>
+        <div class="fgrid">
+          <div class="field">
+            <span class="flabel">Engine</span>
+            <div class="segmented" id="engine-seg">
+              <button type="button" class="seg-btn" data-engine="xtts">
+                <b>XTTS</b><small>klon hlasu · GPU</small></button>
+              <button type="button" class="seg-btn" data-engine="piper">
+                <b>Piper</b><small>offline · rychlý</small></button>
+            </div>
+            <select id="tts_engine" class="sr-only" tabindex="-1" aria-hidden="true">
+              <option value="piper">Piper</option>
+              <option value="xtts" selected>XTTS</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="flabel">Konkrétní hlas</span>
+            <div class="withbtn">
+              <select id="voice"></select>
+              <button id="voice-play" type="button" title="Přehrát ukázku vybraného hlasu (XTTS)"><i data-lucide="play"></i></button>
+            </div>
+            <p id="voice-hint" class="hint">(volitelné)</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="fgroup">
+        <div class="fgroup-t"><i data-lucide="waves"></i> ZVUK ORIGINÁLU</div>
+        <div class="cards">
+          <label class="card rad">
+            <input type="radio" name="audio_mode" value="replace">
+            <b>Nahradit dabingem</b><small>originál se odstraní</small>
+          </label>
+          <label class="card rad">
+            <input type="radio" name="audio_mode" value="voiceover" checked>
+            <b>Voice-over</b><small>přes ztlumený originál</small>
+          </label>
+          <label class="card rad">
+            <input type="radio" name="audio_mode" value="subtitles">
+            <b>Jen titulky</b><small>hlas zůstane</small>
+          </label>
+        </div>
+      </div>
+
+      <div class="fgroup" id="grp-subs">
+        <div class="fgroup-t"><i data-lucide="captions"></i> TITULKY A TEXT</div>
+        <div class="cards">
+          <label class="card sw"><input id="burn_subs" type="checkbox" checked><i></i><span>Zapéct do videa</span></label>
+          <label class="card sw"><input id="llm_correct" type="checkbox" checked><i></i><span>LLM korekce</span></label>
+          <label class="card sw"><input id="review_text" type="checkbox"><i></i><span>Upravit před dabingem</span></label>
+        </div>
+        <div class="fgrid fgrid-3 subopts">
+          <label>Znaků na řádek
+            <select id="subs_chars">
+              <option value="0">Auto</option>
+              <option value="12">12</option><option value="16">16</option>
+              <option value="20">20</option><option value="24">24</option>
+              <option value="30">30</option><option value="40">40</option>
+            </select>
+          </label>
+          <label>Řádky titulku
+            <select id="subs_maxlines">
+              <option value="2" selected>2 řádky</option>
+              <option value="1">1 řádek</option>
+            </select>
+          </label>
+          <label>Velikost písma
+            <select id="subs_size">
+              <option value="">Auto</option>
+              <option value="small">Malé</option>
+              <option value="medium">Střední</option>
+              <option value="large">Velké</option>
+              <option value="xl">Obří</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="runbar">
+        <p id="hint" class="formhint"></p>
+        <button id="start" class="go" disabled><i data-lucide="sparkles"></i> Spustit dabing</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-side">
+    <section class="panel panel-jobs" id="panel-jobs">
+      <div class="phead">
+        <span class="step">3</span>
+        <div class="phead-t"><h2>Fronta zakázek</h2><p>Živý přehled workeru</p></div>
+        <span class="phead-actions">
+          <button id="clear-done" class="icon-btn sm" type="button"
+                  title="Smazat dokončené zakázky i jejich soubory (chybné a běžící zůstanou)"><i data-lucide="circle-check"></i></button>
+          <button id="clear-queue" class="icon-btn sm" type="button"
+                  title="Smazat hotové i chybné zakázky ze seznamu (běžící zůstane)"><i data-lucide="trash-2"></i></button>
         </span>
-        <datalist id="voices-list"></datalist>
-      </label>
-    </div>
-    <div class="row">
-      <fieldset class="seg">
-        <legend>Zvuk originálu</legend>
-        <label class="rad"><input type="radio" name="audio_mode" value="replace" checked> Nahradit dabingem</label>
-        <label class="rad"><input type="radio" name="audio_mode" value="voiceover"> Voice-over přes ztlumený originál</label>
-      </fieldset>
-      <div class="checks">
-        <label class="chk"><input id="burn_subs" type="checkbox"> Zapéct titulky do videa</label>
-        <label class="chk"><input id="llm_correct" type="checkbox" checked> LLM korekce přepisu</label>
       </div>
-    </div>
-    <button id="start" class="go" disabled>Spustit dabing</button>
-    <p id="hint" class="formhint"></p>
-  </section>
-
-  <section class="panel">
-    <h2>3 · Zakázky</h2>
-    <div id="jobs" class="jobs"><p class="empty">Zatím žádné zakázky.</p></div>
-  </section>
+      <div id="jobs" class="jobs"><p class="empty">Zatím žádné zakázky.</p></div>
+    </section>
+  </div>
 </main>
+
+<footer class="foot">PZ AI DAB ALL · LOKÁLNÍ WORKER · V2.0</footer>
 
 <div id="logbox" class="logbox hidden">
   <div class="logbar"><span id="logtitle">Log</span><button id="logclose">✕</button></div>
   <pre id="logtext"></pre>
 </div>
 
-<div id="aebox" class="aebox hidden">
-  <div class="logbar">
-    <span>After Effects · <span id="ae-jobname"></span></span>
-    <button id="aeclose">✕</button>
-  </div>
-  <div class="aebody">
-    <div style="display:flex;justify-content:center;align-items:center;
-                min-height:100px;margin-bottom:12px;border-radius:6px;
-                background:#111;overflow:hidden">
-      <canvas id="ae-canvas" width="400" height="225"
-              style="display:block;border-radius:4px"></canvas>
+<div id="submodal" class="submodal hidden">
+  <div class="submodal-box">
+    <div class="logbar">
+      <span>✎ Úprava titulků před dabingem · <span id="sub-count"></span></span>
+      <button id="sub-close">✕</button>
     </div>
-    <div class="aegrid">
-      <label>Velikost písma (px)
-        <input id="ae-fontsize" type="number" value="80" min="8" max="400">
-      </label>
-      <label>Znaky na řádek
-        <input id="ae-perline" type="number" value="40" min="10" max="120">
-      </label>
-      <label>Rozlišení kompozice
-        <select id="ae-res">
-          <option value="1920x1080" selected>1920×1080 — Full HD</option>
-          <option value="3840x2160">3840×2160 — 4K UHD</option>
-          <option value="1280x720">1280×720 — HD</option>
-          <option value="1080x1920">1080×1920 — 9:16 (Reels / TikTok)</option>
-          <option value="1080x1080">1080×1080 — čtverec</option>
-        </select>
-      </label>
-      <label>Snímkový kmitočet
-        <select id="ae-fps">
-          <option value="25" selected>25 fps (PAL / EU)</option>
-          <option value="24">24 fps (film)</option>
-          <option value="23.976">23.976 fps</option>
-          <option value="30">30 fps</option>
-          <option value="29.97">29.97 fps</option>
-          <option value="50">50 fps</option>
-          <option value="60">60 fps</option>
-        </select>
-      </label>
-      <label>Svislá pozice (% výšky)
-        <input id="ae-posy" type="number" value="88" min="0" max="100">
-      </label>
+    <p class="sub-hint">Uprav český text (a případně časy v sekundách). Pod polem je
+      pro kontrolu originál. Teprve tlačítkem vpravo se spustí dabing a zapečení titulků.</p>
+    <div id="sub-rows" class="sub-rows"></div>
+    <div class="sub-actions">
+      <button id="sub-save" class="lnk">Uložit</button>
+      <button id="sub-srt" class="lnk">Stáhnout SRT</button>
+      <button id="sub-go" class="go">▶ Pokračovat dabingem</button>
     </div>
-    <button id="ae-dl" class="go" style="margin-top:4px">⬇ Stáhnout .jsx skript pro After Effects</button>
   </div>
 </div>
 
-<script src="app.js"></script>
+<div id="aebackdrop" class="modal-backdrop hidden"></div>
+<div id="aebox" class="aebox hidden">
+  <div class="logbar">
+    <span><i data-lucide="subtitles"></i> Editor titulků · zapékání · <span id="ae-jobname"></span></span>
+    <button id="aeclose">✕</button>
+  </div>
+  <div class="aebody">
+    <div class="ae-preview"><canvas id="ae-canvas" width="400" height="225"></canvas></div>
+    <p id="ed-detect" class="ed-detect">Detekuji video…</p>
+    <div class="fgrid fgrid-2 ed-fields">
+      <label class="ed-slide">Velikost písma (px)
+        <span class="ed-row">
+          <input id="ae-fontsize-r" class="slider" type="range" value="80" min="8" max="300" step="1">
+          <input id="ae-fontsize" type="number" value="80" min="8" max="400">
+        </span>
+      </label>
+      <label class="ed-slide">Znaky na řádek
+        <span class="ed-row">
+          <input id="ae-perline-r" class="slider" type="range" value="40" min="8" max="80" step="1">
+          <input id="ae-perline" type="number" value="40" min="8" max="120">
+        </span>
+      </label>
+      <label class="ed-slide">Svislá pozice (% výšky)
+        <span class="ed-row">
+          <input id="ae-posy-r" class="slider" type="range" value="88" min="1" max="99" step="1">
+          <input id="ae-posy" type="number" value="88" min="1" max="99">
+        </span>
+      </label>
+      <label>Řádky titulku
+        <select id="ae-maxlines">
+          <option value="2" selected>2 řádky</option>
+          <option value="1">1 řádek</option>
+        </select>
+      </label>
+    </div>
+    <p class="ed-hint">Náhled respektuje orientaci detekovaného videa. Nastavení se pamatuje.
+      Vlastní velikost (px) a pozice mají přednost před volbami v panelu Nastavení.</p>
+    <div class="ed-actions">
+      <button id="ed-burn" class="go ghost"><i data-lucide="captions"></i> Jen zapéct titulky</button>
+      <button id="ed-burndub" class="go"><i data-lucide="sparkles"></i> Zapéct + dabovat</button>
+      <button id="ed-reburn" class="go hidden"><i data-lucide="flame"></i> ▶ Přezapéct titulky</button>
+    </div>
+  </div>
+</div>
+
+<script src="lucide.min.js?v=1"></script>
+<script src="app.js?v=9"></script>
+<script>lucide.createIcons({attrs:{"stroke-width":1.75}});</script>
 </body>
 </html>

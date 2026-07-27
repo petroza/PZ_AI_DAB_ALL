@@ -38,14 +38,17 @@ class DubJob:
     target_lang: str = config.DEFAULT_TARGET
     tts_engine: str = config.TTS_ENGINE
     voice: Optional[str] = None
-    audio_mode: str = config.AUDIO_MODE          # replace | voiceover
-    burn_subs: bool = False
+    audio_mode: str = config.AUDIO_MODE          # replace | voiceover | subtitles
+    burn_subs: bool = config.BURN_SUBS
     subs_preset: str = "classic"                 # classic | reels | reels_box | word | karaoke…
     subs_chars: int = 0                          # max znaků/řádek (0 = auto dle šířky videa)
     subs_maxlines: int = 2                       # 1 nebo 2 řádky
     subs_size: str = ""                          # velikost: ""=auto | small|medium|large|xl
+    subs_size_px: int = 0                        # přesná velikost písma v px (0 = neurčeno, řídí se subs_size/preset)
+    subs_posy: int = 0                           # svislá pozice titulku v % výšky shora (0 = dle presetu, 88 = klasicky dole)
     translator: str = "local"                    # local | gemma31b | google | deepl
     llm_correct: bool = True
+    review_text: bool = False                    # po analýze zastavit k úpravě textu
 
     status: str = "queued"
     progress: int = 0
@@ -169,7 +172,9 @@ class JobManager:
                 return False
             if job.status == "queued" and job.started_at is not None:
                 return False
-            if job.status not in ("queued", "done", "error"):
+            # „review" = job čeká na schválení upravených titulků, neběží →
+            # je startovatelný (spustí se fáze 2, dabing z hotových segmentů).
+            if job.status not in ("queued", "done", "error", "review"):
                 return False
             for k, v in fields.items():
                 if hasattr(job, k):
@@ -184,11 +189,49 @@ class JobManager:
             jobs: List[dict] = []
             for f in config.JOBS_DIR.glob("*.json"):
                 try:
-                    jobs.append(json.loads(f.read_text(encoding="utf-8")))
+                    data = json.loads(f.read_text(encoding="utf-8"))
                 except Exception:
                     continue
+                # Ve složce smí ležet jen popisy jobů. Cokoli jiného (seznam,
+                # cizí soubor) přeskoč — jinak spadne řazení i celé /api/jobs.
+                if isinstance(data, dict) and data.get("id"):
+                    jobs.append(data)
         jobs.sort(key=lambda j: j.get("created_at", ""), reverse=True)
         return jobs
+
+    def clear(self, scope: str = "finished") -> dict:
+        """Hromadně promaže frontu. Vrací {'deleted': N, 'skipped': M}.
+
+        scope:
+          'done'     → jen úspěšně dokončené (chybné nechá — ty chce člověk vidět),
+          'finished' → dokončené a chybné zakázky (done, error),
+          'all'      → navíc i čekající nespuštěné (nahráno, ještě neběží).
+        Aktivně běžící zakázka (rozpracovaná pipeline) se NIKDY nesmaže —
+        smazání jejích souborů za běhu by pipeline rozbilo; taková se počítá
+        do 'skipped'.
+        """
+        with self._lock:
+            ids = [f.stem for f in config.JOBS_DIR.glob("*.json")]
+        deleted = skipped = 0
+        for jid in ids:
+            job = self.get(jid)
+            if not job:
+                continue
+            finished = job.status in ("done", "error")
+            idle_queued = job.status == "queued" and not job.started_at
+            active = not finished and not idle_queued   # rozpracovaná / zařazená pipeline
+            if scope == "done":
+                remove = job.status == "done"
+            elif scope == "finished":
+                remove = finished
+            else:
+                remove = finished or idle_queued
+            if remove:
+                if self.delete(jid):
+                    deleted += 1
+            elif active:
+                skipped += 1
+        return {"deleted": deleted, "skipped": skipped}
 
     def delete(self, job_id: str) -> bool:
         with self._lock:
@@ -207,6 +250,11 @@ class JobManager:
             work_dir = config.WORK_DIR / job_id
             try:
                 shutil.rmtree(work_dir, ignore_errors=True)
+            except Exception:
+                pass
+            # rozpracované titulky z režimu „upravit text před dabingem"
+            try:
+                (config.JOBS_DIR / "segments" / f"{job_id}.json").unlink(missing_ok=True)
             except Exception:
                 pass
             try:

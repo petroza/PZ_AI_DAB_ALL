@@ -2,8 +2,23 @@
 __pycache__/
 *.pyc
 .venv/
+.venv_vox/
 .venv_xtts/
+runtime/
 work/
+
+# Secrety a lokální konfigurace (necommitovat!)
+.htpasswd
+worker_config.json
+NASTAV_HESLO_ALLDUB.*
+prikaldy/
+web/config.php
+web/data/
+
+# Zálohy a velká média (ukázky se stahují zvlášť)
+*.bak
+samples/*
+!samples/.gitkeep
 
 # Binárky, modely a hlasy (stahují se zvlášť — viz README)
 *.gguf
@@ -21,11 +36,3 @@ models/*
 tools/*
 voices/*
 !**/.gitkeep
-# zdrojové skripty v tools/ (ne binárky) – ty chceme verzovat
-!tools/xtts_server.py
-!tools/dabtest.sh
-
-# Tajný worker token – jen lokálně/na serveru, ne do gitu
-web/config.php
-worker_config.json
-web/data/

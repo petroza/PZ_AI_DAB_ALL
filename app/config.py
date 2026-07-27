@@ -75,9 +75,9 @@ DEFAULT_SOURCE = "auto"
 DEFAULT_TARGET = "cs-CZ"          # priorita: čeština
 
 # --- TTS ------------------------------------------------------------------
-# "piper" = lokální offline (výchozí, drží slib CPU/offline),
-# "voicestudio" = HTTP volání běžícího PZ Voice Studia (Chatterbox, klonování).
-TTS_ENGINE = os.environ.get("DAB_TTS_ENGINE", "piper")
+# Interní XTTS s klonováním původního hlasu je výchozí; Piper zůstává rychlá
+# alternativa pro počítače bez podporované GPU.
+TTS_ENGINE = os.environ.get("DAB_TTS_ENGINE", "xtts")
 
 PIPER_EXE_NAMES = ["piper.exe", "piper"]
 # Výchozí Piper hlas pro daný cílový jazyk. Stačí jméno (bez .onnx) – soubor
@@ -104,7 +104,8 @@ VOICESTUDIO_TIMEOUT = _env_int("DAB_VS_TIMEOUT", 600)
 # --- Dabing (mix & mux) ---------------------------------------------------
 # "replace"  = nahradit původní zvuk dabingem,
 # "voiceover"= dabing přes ztlumený originál (zachová hudbu/ruchy).
-AUDIO_MODE = os.environ.get("DAB_AUDIO_MODE", "replace")
+AUDIO_MODE = os.environ.get("DAB_AUDIO_MODE", "voiceover")
+BURN_SUBS = os.environ.get("DAB_BURN_SUBS", "1").strip().lower() not in ("0", "false", "no", "off")
 DUCK_DB = _env_float("DAB_DUCK_DB", -14.0)        # ztlumení originálu ve voiceover
 TTS_GAIN_DB = _env_float("DAB_TTS_GAIN_DB", 0.0)
 
@@ -117,6 +118,37 @@ MIN_TEMPO = _env_float("DAB_MIN_TEMPO", 0.75)
 
 MIX_RATE = 48000          # vzorkování společné zvukové stopy
 RUBBERBAND_EXE_NAMES = ["rubberband.exe", "rubberband"]
+
+# --- Rozpočet délky překladu (kolik se toho dá vyslovit) ------------------
+# Kolik ZNAKŮ české řeči se reálně vejde do jedné sekundy slotu. Podle toho se
+# instruuje překladač, jak moc smí být překlad dlouhý.
+# MĚŘENO (XTTS v2, cs, klonovaný hlas): nativní tempo ~7,9 zn/s; při povoleném
+# zrychlení na 1,3× ~10,0 zn/s. Původní hodnota 14 byla skoro dvojnásobek
+# reality → překlad se do slotu nevešel a rubberband ho musel drtit (běžně
+# 1,7–2,2×), což je hlavní příčina „uspěchaného“ dabingu. 9.5 nechává malou
+# rezervu pod stropem 1,3× a udrží řeč v přirozeném tempu.
+DUB_CHARS_PER_SEC = _env_float("DAB_DUB_CPS", 9.5)
+
+# --- Využití pauz mezi replikami -----------------------------------------
+# Řeč smí přetéci konec svého slotu do ticha, které po ní ve videu následuje
+# (dabingová praxe – mluví se „do pauzy“, místo aby se věta stlačila).
+# Slot se prodlouží nejvýš o DUB_SLOT_EXTEND_MAX sekund a vždy zůstane
+# DUB_SLOT_GUARD sekund rezervy před začátkem další repliky.
+DUB_SLOT_EXTEND_MAX = _env_float("DAB_SLOT_EXTEND", 1.5)
+DUB_SLOT_GUARD = _env_float("DAB_SLOT_GUARD", 0.12)
+
+# Ořez balastu, který XTTS přilepí za konec repliky (dozvuk, nádech, občas i
+# halucinované slovo navíc). Změřeno až 57 % délky krátkého klipu — kvůli němu
+# se replika „nevejde“ do slotu a zbytečně ji zdrtí time-stretch. Ořez stojí
+# jeden ASR průchod na klip; vypnout lze DAB_TRIM_TAIL=0.
+DUB_TRIM_TAIL = os.environ.get("DAB_TRIM_TAIL", "1").strip().lower() not in ("0", "false", "no", "off")
+
+# Od jakého přetečení sahat po NATIVNÍM zrychlení TTS (XTTS umí mluvit rychleji
+# už při syntéze). Měřeno srozumitelností (přepis dabingu × předloha): do ~1,3×
+# je na tom kvalitní rubberband stejně nebo líp (88 % vs 81 % shody), protože
+# nativní zrychlení mění artikulaci modelu. Nad tímto prahem už rubberband sám
+# řeč drtí, takže se práce rozdělí: TTS zrychlí do 1,3× a zbytek dojede stretch.
+DUB_NATIVE_SPEED_FROM = _env_float("DAB_NATIVE_SPEED_FROM", 1.30)
 
 
 # --- Pomocné: hledání nástrojů -------------------------------------------

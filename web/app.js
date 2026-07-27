@@ -32,17 +32,16 @@ function fillSel(sel, codes, def){
 const VOICES = {
   xtts: [
     ["", "🔊 Klonovat původní hlas (doporučeno)"],
-    ["Daisy Studious", "Daisy Studious — ženský"],
+    ["Daisy Studious", "👩 XTTS ženský hlas — doporučeno"],
     ["Alison Dietlinde", "Alison Dietlinde — ženský"],
     ["Gracie Wise", "Gracie Wise — ženský"],
     ["Alexandra Hisakawa", "Alexandra Hisakawa — ženský"],
-    ["Damien Black", "Damien Black — mužský"],
+    ["Damien Black", "👨 XTTS mužský hlas — doporučeno"],
     ["Aaron Dreschner", "Aaron Dreschner — mužský"],
     ["Baldur Sanjin", "Baldur Sanjin — mužský"],
     ["Viktor Eka", "Viktor Eka — mužský"],
   ],
   piper: [["", "Automaticky dle cílového jazyka"]],
-  voicestudio: [["", "Výchozí hlas (Chatterbox)"]],
 };
 function fillVoicesFor(engId, voiceId, hintId, want){
   const engEl=$(engId), sel=$(voiceId);
@@ -70,6 +69,15 @@ async function loadStatus(){
 function setPicked(msg,err){const e=$("picked");e.textContent=msg;e.classList.toggle("err",!!err);}
 function upbar(show,pct){const b=$("upbar"),f=$("upbar-fill");if(b)b.classList.toggle("hidden",!show);if(f&&pct!=null)f.style.width=pct+"%";}
 
+function syncAudioMode(){
+  const r=document.querySelector('input[name=audio_mode]:checked');
+  const only=!!r&&r.value==="subtitles";
+  if($("tts_engine")) $("tts_engine").disabled=only;
+  if($("voice")) $("voice").disabled=only;
+  if($("burn_subs")){if(only)$("burn_subs").checked=true;$("burn_subs").disabled=only;}
+  if($("start")) $("start").textContent=only?"Vytvořit video s českými titulky":"Spustit dabing";
+}
+
 async function startDub(){
   if(!picked) return;
   $("start").disabled=true;
@@ -82,6 +90,9 @@ async function startDub(){
     audio_mode:document.querySelector('input[name=audio_mode]:checked').value,
     burn_subs:$("burn_subs").checked?"1":"0",
     subs_preset:$("subs_preset").value,
+    subs_chars:$("subs_chars").value,
+    subs_maxlines:$("subs_maxlines").value,
+    subs_size:$("subs_size").value,
     review_text:$("review_text").checked?"1":"0",
     llm_correct:$("llm_correct").checked?"1":"0",
   };
@@ -519,8 +530,20 @@ $("jobs").addEventListener("click",e=>{
   }
 });
 $("tts_engine").addEventListener("change",fillVoices);
+// volby vzhledu titulků dávají smysl jen když se titulky zapékají do obrazu
+function syncSubsOpts(){
+  const on=$("burn_subs").checked;
+  ["preset-wrap","chars-wrap","lines-wrap","size-wrap"].forEach(id=>{
+    const el=$(id); if(el) el.classList.toggle("hidden",!on);
+  });
+}
+document.querySelectorAll('input[name=audio_mode]').forEach(el=>el.addEventListener("change",()=>{
+  syncAudioMode();
+  syncSubsOpts();
+}));
 fillVoices();
-$("burn_subs").addEventListener("change",e=>{$("preset-wrap").classList.toggle("hidden",!e.target.checked);});
+$("burn_subs").addEventListener("change",syncSubsOpts);
+syncSubsOpts();
 // re-dub modal
 $("rd-engine").addEventListener("change",()=>fillVoicesFor("rd-engine","rd-voice","rd-voice-hint"));
 $("rd-burn").addEventListener("change",e=>{$("rd-preset-wrap").classList.toggle("hidden",!e.target.checked);});
@@ -536,4 +559,5 @@ $("redubmodal").addEventListener("click",e=>{ if(e.target.id==="redubmodal") clo
 })();
 
 loadStatus();
+syncAudioMode();
 refresh().then(r=>schedule(r?2000:6000));

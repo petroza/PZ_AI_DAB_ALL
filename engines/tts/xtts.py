@@ -82,14 +82,17 @@ class XttsBackend(TTSBackend):
             import requests
             r = requests.get(XTTS_URL + "/health", timeout=3)
             if r.ok:
-                loaded = bool(r.json().get("loaded"))
-                return True, (f"XTTS server {XTTS_URL}"
-                              + (" (model načten)" if loaded
-                                 else " (model se načte při 1. použití)"))
+                data = r.json()
+                if data.get("error"):
+                    return False, f"Interní XTTS se nepodařilo načíst: {data['error']}"
+                loaded = bool(data.get("loaded"))
+                device = str(data.get("device") or "cpu").upper()
+                return True, (f"Interní XTTS ({device})"
+                              + (" – model připraven" if loaded
+                                 else " – model se právě načítá"))
             return False, f"XTTS server {XTTS_URL} odpověděl HTTP {r.status_code}"
         except Exception:
-            return False, (f"XTTS server neběží na {XTTS_URL}. "
-                           f"Spusť START_XTTS.bat (kvalitní český hlas přes GPU).")
+            return False, "Interní XTTS se ještě spouští. Zkus to za chvíli znovu."
 
     def synth(self, text: str, out_wav: Path, voice: Optional[str] = None,
               lang: Optional[str] = None, speed: float = 1.0, log=None) -> Path:

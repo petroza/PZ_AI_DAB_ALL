@@ -161,7 +161,7 @@ rozhraní, mění se to v `engines/asr/` (jeden zdroj pravdy).
   `cs_CZ-jirka`. Drží slib „bez cloudu, na CPU". Robotičtější.
 - **XTTS** (doporučeno pro kvalitu) — neuronový hlas, **klonuje původního
   mluvčího** z videa, přirozená čeština. Běží lokálně na **GPU**. Zapni
-  `START_XTTS.bat` a v UI zvol engine „XTTS". Viz níže.
+  `tools\start\START_XTTS.bat` a v UI zvol engine „XTTS". Viz níže.
 - **PZ Voice Studio** — připoj běžící Studio a využij **Chatterbox**
   (klonování, multilingual). Ideálně s GPU.
 
@@ -175,7 +175,7 @@ python -m venv .venv_xtts
 .venv_xtts\Scripts\python -m pip install coqui-tts "transformers==4.57.1"
 ```
 
-Spuštění: **`START_XTTS.bat`** (server na :7868, první start stáhne model ~1,8 GB).
+Spuštění: **`tools\start\START_XTTS.bat`** (server na :7868, první start stáhne model ~1,8 GB).
 Pak v dabingu zvol engine **XTTS**. Nejjednodušší: **`START_ALL.bat`** spustí
 worker i XTTS server najednou.
 
@@ -222,17 +222,6 @@ počítač (pokud výslovně nezvolíš cloudový překladač/hlas, který tu ne
 - Chatterbox — <https://github.com/resemble-ai/chatterbox>
 - Ollama — <https://ollama.com>
 
-## Autor
-
-**Autorem této aplikace je Petr Závorka.** Kdokoli ji použije, šíří, upraví nebo
-zapracuje do jiného díla či produktu, **musí Petra Závorku uvést jako autora**
-původní aplikace (a zachovat oznámení o autorských právech a licenci).
-
 ## Licence
 
-Kód: MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE) (vč. doložky o uvádění autora).
-
-**Modely a nástroje třetích stran** (TTS, ASR, překlad, ffmpeg…) mají vlastní,
-samostatné licence — viz [MODEL_LICENSES.md](MODEL_LICENSES.md). Pozor zejména na
-**XTTS v2 (nekomerční, CPML)** a na osobnostní práva při klonování hlasu. Před
-produkčním/komerčním nasazením si licence ověř.
+MIT © 2026 Petr Závorka — viz [LICENSE](LICENSE).

@@ -6,6 +6,7 @@ Spuštění (z kořene projektu):
 """
 from __future__ import annotations
 
+import json
 import os
 import platform
 import re
@@ -96,9 +97,16 @@ class DubRequest(BaseModel):
     target_lang: "str | None" = None
     tts_engine: "str | None" = None
     voice: "str | None" = None
-    audio_mode: "str | None" = None       # replace | voiceover
+    audio_mode: "str | None" = None       # replace | voiceover | subtitles
     burn_subs: "bool | None" = None
     llm_correct: "bool | None" = None
+    subs_preset: "str | None" = None      # classic | reels | reels_box | karaoke…
+    subs_chars: "int | None" = None       # znaků na řádek (0 = auto dle šířky)
+    subs_maxlines: "int | None" = None    # 1 nebo 2 řádky
+    subs_size: "str | None" = None        # "" = auto | small|medium|large|xl
+    subs_size_px: "int | None" = None     # přesná velikost písma v px (0 = neurčeno)
+    subs_posy: "int | None" = None        # svislá pozice titulku v % výšky shora
+    review_text: "bool | None" = None     # zastavit po analýze k úpravě titulků
 
 
 def _ollama_status() -> dict:
@@ -119,6 +127,7 @@ def api_status() -> dict:
     eng = asr_engine.engine_status()
     ollama = _ollama_status()
     piper_ready, piper_info = get_backend("piper").is_ready()
+    xtts_ready, xtts_info = get_backend("xtts").is_ready()
     vs_ready, vs_info = get_backend("voicestudio").is_ready()
     cs_voice = config.find_piper_voice("cs-CZ")
     translate_ok = ollama["ok"] or eng["argostranslate_ok"]
@@ -141,6 +150,7 @@ def api_status() -> dict:
             "default": config.TTS_ENGINE,
             "piper": {"ok": piper_ready, "info": piper_info,
                       "cs_voice": bool(cs_voice)},
+            "xtts": {"ok": xtts_ready, "info": xtts_info},
             "voicestudio": {"ok": vs_ready, "info": vs_info,
                             "url": config.VOICESTUDIO_URL},
         },
@@ -148,7 +158,8 @@ def api_status() -> dict:
         "target_languages": config.TARGET_LANGUAGES,
         "defaults": {"source": config.DEFAULT_SOURCE,
                      "target": config.DEFAULT_TARGET,
-                     "audio_mode": config.AUDIO_MODE},
+                     "audio_mode": config.AUDIO_MODE,
+                     "burn_subs": config.BURN_SUBS},
         "ready": ff["ok"] and eng["asr_ok"] and piper_ready,
     }
 
@@ -228,15 +239,184 @@ def api_dub(job_id: str, req: "DubRequest | None" = Body(default=None)) -> dict:
                  "duration": 0.0, "segments_count": 0, "text_preview": ""}
     if req:
         for k in ("source_lang", "target_lang", "tts_engine", "voice",
-                  "audio_mode", "burn_subs", "llm_correct"):
+                  "audio_mode", "burn_subs", "llm_correct",
+                  "subs_preset", "subs_chars", "subs_maxlines", "subs_size",
+                  "subs_size_px", "subs_posy", "review_text"):
             v = getattr(req, k)
             if v is not None:
                 upd[k] = v
+    if "subs_chars" in upd:
+        upd["subs_chars"] = max(0, min(60, int(upd["subs_chars"])))
+    if "subs_maxlines" in upd:
+        upd["subs_maxlines"] = 1 if int(upd["subs_maxlines"]) == 1 else 2
+    if "subs_size_px" in upd:
+        upd["subs_size_px"] = max(0, min(400, int(upd["subs_size_px"])))
+    if "subs_posy" in upd:
+        upd["subs_posy"] = max(0, min(100, int(upd["subs_posy"])))
+    if upd.get("subs_size") not in (None, "", "small", "medium", "large", "xl"):
+        raise HTTPException(400, "Neplatná velikost titulků.")
+    if upd.get("audio_mode", job.audio_mode) not in ("replace", "voiceover", "subtitles"):
+        raise HTTPException(400, "Neplatný režim zvuku.")
+    if upd.get("audio_mode", job.audio_mode) == "subtitles":
+        upd["burn_subs"] = True
     if not jobs.try_queue(job_id, **upd):
         raise HTTPException(409, "Job už běží.")
+    # Režim „upravit text": po analýze se zastaví a čeká na schválení segmentů.
+    if upd.get("review_text", job.review_text):
+        threading.Thread(target=_run_prepare, args=(job_id,), daemon=True).start()
+        return {"job_id": job_id, "status": "preparing"}
     threading.Thread(target=pipeline.run_dub, args=(jobs, job_id),
                      daemon=True).start()
     return {"job_id": job_id, "status": "started"}
+
+
+class ReburnRequest(BaseModel):
+    """Dodatečné přezapečení titulků do JIŽ hotového videa (bez nového dabingu).
+    Použije se český SRT výstup (output_srt_tgt) a přepeče se do output_video."""
+    subs_preset: "str | None" = None
+    subs_chars: "int | None" = None
+    subs_maxlines: "int | None" = None
+    subs_size: "str | None" = None
+    subs_size_px: "int | None" = None
+    subs_posy: "int | None" = None
+
+
+def _run_reburn(job_id: str) -> None:
+    """Vlákno: přepeče titulky do hotového videa dle uložených subs_* polí."""
+    job = jobs.get(job_id)
+    try:
+        src = Path(job.output_video)
+        srt = Path(job.output_srt_tgt)
+        out = config.OUTPUTS_DIR / f"{job_id}.reburn.mp4"
+        jobs.set_status(job_id, "burning", 20)
+        pipeline.burn_existing_video(
+            str(src), str(srt), str(out),
+            preset=getattr(job, "subs_preset", "classic") or "classic",
+            subs_chars=int(getattr(job, "subs_chars", 0) or 0),
+            subs_maxlines=int(getattr(job, "subs_maxlines", 0) or 0),
+            subs_size=str(getattr(job, "subs_size", "") or ""),
+            subs_size_px=int(getattr(job, "subs_size_px", 0) or 0),
+            subs_posy=int(getattr(job, "subs_posy", 0) or 0),
+            log=lambda m: jobs.append_log(jobs.get(job_id), m))
+        if not out.is_file() or out.stat().st_size == 0:
+            raise RuntimeError("Zapékání nevytvořilo výstup.")
+        # nahraď staré výstupní video novým (s titulky)
+        try:
+            old = Path(job.output_video)
+            if old.is_file() and old != out:
+                old.unlink(missing_ok=True)
+        except Exception:
+            pass
+        jobs.update(job_id, output_video=str(out), burn_subs=True)
+        jobs.set_status(job_id, "done", 100)
+    except Exception as e:
+        jobs.update(job_id, error=f"Přezapečení titulků selhalo: {e}")
+        jobs.set_status(job_id, "error")
+
+
+@app.post("/api/reburn/{job_id}")
+def api_reburn(job_id: str, req: "ReburnRequest | None" = Body(default=None)) -> dict:
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job nenalezen.")
+    if job.status not in ("done",):
+        raise HTTPException(409, "Přezapékat lze jen dokončenou zakázku.")
+    if not job.output_video or not Path(job.output_video).is_file():
+        raise HTTPException(400, "Zakázka nemá výstupní video.")
+    if not job.output_srt_tgt or not Path(job.output_srt_tgt).is_file():
+        raise HTTPException(400, "Zakázka nemá titulkový SRT (cílový jazyk).")
+    upd: dict = {}
+    if req:
+        for k in ("subs_preset", "subs_chars", "subs_maxlines", "subs_size",
+                  "subs_size_px", "subs_posy"):
+            v = getattr(req, k)
+            if v is not None:
+                upd[k] = v
+    if "subs_chars" in upd:
+        upd["subs_chars"] = max(0, min(60, int(upd["subs_chars"])))
+    if "subs_maxlines" in upd:
+        upd["subs_maxlines"] = 1 if int(upd["subs_maxlines"]) == 1 else 2
+    if "subs_size_px" in upd:
+        upd["subs_size_px"] = max(0, min(400, int(upd["subs_size_px"])))
+    if "subs_posy" in upd:
+        upd["subs_posy"] = max(0, min(100, int(upd["subs_posy"])))
+    if upd.get("subs_size") not in (None, "", "small", "medium", "large", "xl"):
+        raise HTTPException(400, "Neplatná velikost titulků.")
+    if upd:
+        jobs.update(job_id, **upd)
+    jobs.update(job_id, error=None)
+    threading.Thread(target=_run_reburn, args=(job_id,), daemon=True).start()
+    return {"job_id": job_id, "status": "burning"}
+
+
+def _segments_path(job_id: str) -> Path:
+    """Rozpracované titulky k úpravě.
+
+    POZOR: nesmí ležet přímo v JOBS_DIR — ta se čte přes glob("*.json") jako
+    seznam jobů a cizí soubor (tady pole segmentů) shodí celé /api/jobs.
+    """
+    d = config.JOBS_DIR / "segments"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{job_id}.json"
+
+
+def _run_prepare(job_id: str) -> None:
+    """Fáze 1 — přepis + překlad; segmenty odloží na disk k úpravě."""
+    res = pipeline.prepare_segments(jobs, job_id)
+    if res:
+        _segments_path(job_id).write_text(
+            json.dumps(res["segments"], ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+class SegmentsRequest(BaseModel):
+    segments: list
+    start: bool = False        # True = rovnou pokračovat dabingem
+
+
+@app.get("/api/segments/{job_id}")
+def api_get_segments(job_id: str) -> dict:
+    """Segmenty k úpravě (po fázi analýzy)."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job neexistuje.")
+    p = _segments_path(job_id)
+    if not p.is_file():
+        raise HTTPException(404, "Segmenty zatím nejsou připravené.")
+    return {"job_id": job_id, "status": job.status,
+            "segments": json.loads(p.read_text(encoding="utf-8"))}
+
+
+@app.post("/api/segments/{job_id}")
+def api_save_segments(job_id: str, req: SegmentsRequest) -> dict:
+    """Uloží upravené titulky. S ``start`` rovnou spustí dabing/zapečení."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job neexistuje.")
+    if job.status not in ("review", "error", "done"):
+        raise HTTPException(409, "Job právě běží — počkej na dokončení analýzy.")
+    clean = []
+    for s in req.segments or []:
+        txt = str(s.get("text") or "").strip()
+        st, en = float(s.get("start") or 0.0), float(s.get("end") or 0.0)
+        if txt and en > st:
+            clean.append({"start": st, "end": en, "text": txt,
+                          "src": str(s.get("src") or "")})
+    if not clean:
+        raise HTTPException(400, "Žádné použitelné segmenty.")
+    _segments_path(job_id).write_text(
+        json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    # I bez spuštění dabingu přepiš titulkové výstupy, ať jde stáhnout SRT s úpravami.
+    pipeline._write_target_outputs(jobs, job_id, job, job.target_lang, clean)
+    if not req.start:
+        jobs.set_status(job_id, "review", 50)
+        return {"job_id": job_id, "status": "review", "segments": len(clean)}
+    if not jobs.try_queue(job_id):
+        raise HTTPException(409, "Job už běží.")
+    threading.Thread(target=pipeline.run_dub, args=(jobs, job_id, clean),
+                     daemon=True).start()
+    return {"job_id": job_id, "status": "started", "segments": len(clean)}
 
 
 @app.get("/api/jobs")
@@ -281,8 +461,26 @@ def api_download(job_id: str, kind: str) -> FileResponse:
     if not entry or not entry[0] or not Path(entry[0]).is_file():
         raise HTTPException(404, f"Výstup '{kind}' pro tento job neexistuje.")
     path, media, ext = entry
-    name = f"{Path(job.filename).stem}.{ext}"
+    stem = Path(job.filename).stem
+    # MP4 se zapečenými titulky a samostatné SRT nesmějí mít stejný název:
+    # VLC a další přehrávače by SRT automaticky načetly a zobrazily titulky 2×.
+    if kind == "video":
+        suffix = "s-ceskymi-titulky.mp4" if job.burn_subs else "dabing.mp4"
+        name = f"{stem}.{suffix}"
+    elif kind == "srt_tgt":
+        name = f"{stem}.samostatne-ceske-titulky.srt"
+    else:
+        name = f"{stem}.{ext}"
     return FileResponse(path, media_type=media, filename=name)
+
+
+@app.post("/api/jobs/clear")
+def api_clear(scope: str = "finished") -> dict:
+    """Hromadně promaže frontu. scope=done (jen úspěšně hotové) | finished
+    (hotové i chybné) | all (i čekající nespuštěné). Běžící zakázka zůstává."""
+    if scope not in ("done", "finished", "all"):
+        raise HTTPException(400, "Neplatný scope (done | finished | all).")
+    return jobs.clear(scope)
 
 
 @app.delete("/api/jobs/{job_id}")

@@ -212,10 +212,46 @@ def _carry_dangling_lines(lines: list) -> list:
     return lines
 
 
+def _best_two_line_split(words: list, chars: int) -> "list | None":
+    """Najde nejlepší místo zlomu na dva řádky — jako to dělá titulkář.
+
+    Hladové plnění řádku (ber slova, dokud se vejdou) dává ošklivé výsledky:
+    „Z Podolska jde / kouř,“ nebo „Média zatím / mlčí. U mého domu výbuch.“
+    Kvalitní titulek se láme přednostně na hranici věty nebo za interpunkcí a
+    řádky má pokud možno stejně dlouhé. Vrací dva řádky, nebo None, když se
+    text na dva řádky dané šířky nevejde.
+    """
+    if len(words) < 2:
+        return None
+    best = None
+    for i in range(1, len(words)):
+        a = " ".join(words[:i])
+        b = " ".join(words[i:])
+        if len(a) > chars or len(b) > chars:
+            continue
+        # Čím vyrovnanější řádky, tím lépe; zlom po interpunkci se bonifikuje
+        # (konec věty nejvíc, čárka o něco méně).
+        penalty = abs(len(a) - len(b))
+        tail = a.rstrip()[-1:]
+        if tail in ".!?…":
+            penalty -= 40
+        elif tail in ",;:–—":
+            penalty -= 8
+        if best is None or penalty < best[0]:
+            best = (penalty, [a, b])
+    return best[1] if best else None
+
+
 def _wrap_line(text: str, chars: int, max_lines: int = 2) -> str:
     """Zalomí text na řádky do `chars` znaků (po slovech), max `max_lines` řádků.
     Krátkou předložku/spojku nenechá viset na konci řádku (české pravidlo)."""
     words = (text or "").split()
+    # Dvouřádkový titulek je nejčastější případ — hledej vyvážený zlom,
+    # přednostně na hranici věty, ne prostě první místo, kde už se to nevejde.
+    if max_lines == 2 and len(" ".join(words)) > chars:
+        pretty = _best_two_line_split(words, chars)
+        if pretty:
+            return "\n".join(_carry_dangling_lines(pretty))
     lines, cur = [], ""
     for w in words:
         if not cur:
@@ -512,11 +548,12 @@ def burn_subtitles(video_path: Union[str, Path], srt_path: Union[str, Path],
     srt_rel = tmp_ass.name
 
     total = get_audio_duration(video_path) or 0.0
+    audio_args = ["-c:a", "copy"] if opts.get("audio_copy") else ["-c:a", "aac", "-b:a", "192k"]
     cmd = [
         str(ffmpeg), "-y", "-i", str(video_path),
         "-vf", f"subtitles={srt_rel}",
         "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        *audio_args, "-movflags", "+faststart",
         "-progress", "pipe:1", "-nostats", str(output_path),
     ]
     _log(log, f"FFMPEG burn-in (cwd={work_dir}): " + " ".join(cmd))
