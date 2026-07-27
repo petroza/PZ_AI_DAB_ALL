@@ -484,12 +484,29 @@ def api_clear(scope: str = "finished") -> dict:
 
 
 @app.delete("/api/jobs/{job_id}")
-def api_delete(job_id: str) -> dict:
+def api_delete(job_id: str, files: bool = True) -> dict:
+    """files=true (výchozí) smaže zakázku i se soubory na disku.
+    files=false jen odebere záznam ze seznamu, výstupy na disku zůstanou."""
     if not _valid_job_id(job_id):
         raise HTTPException(400, "Neplatné job_id.")
-    if not jobs.delete(job_id):
+    if not jobs.delete(job_id, files=files):
         raise HTTPException(404, "Job nenalezen.")
-    return {"deleted": job_id}
+    return {"deleted": job_id, "files": files}
+
+
+@app.get("/api/play/{job_id}")
+def api_play(job_id: str) -> FileResponse:
+    """Přehrání výstupního videa přímo v prohlížeči (inline, s podporou Range/seek)."""
+    if not _valid_job_id(job_id):
+        raise HTTPException(400, "Neplatné job_id.")
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job nenalezen.")
+    path = job.output_video or job.upload_path
+    if not path or not Path(path).is_file():
+        raise HTTPException(404, "Video pro tuto zakázku neexistuje.")
+    return FileResponse(path, media_type="video/mp4",
+                        content_disposition_type="inline")
 
 
 # frontend (mount NAKONEC, ať /api/* má přednost)

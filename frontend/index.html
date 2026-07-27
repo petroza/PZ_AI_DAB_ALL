@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -261,8 +261,17 @@
   </div>
 </div>
 
+<div id="vidbackdrop" class="modal-backdrop hidden"></div>
+<div id="vidbox" class="vidbox hidden">
+  <div class="logbar">
+    <span><i data-lucide="play"></i> Přehrávač · <span id="vid-name"></span></span>
+    <button id="vidclose">✕</button>
+  </div>
+  <video id="vidplayer" class="vidplayer" controls playsinline></video>
+</div>
+
 <script src="lucide.min.js?v=1"></script>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 <script>lucide.createIcons({attrs:{"stroke-width":1.75}});</script>
 </body>
 </html>

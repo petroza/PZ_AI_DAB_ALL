@@ -233,20 +233,24 @@ class JobManager:
                 skipped += 1
         return {"deleted": deleted, "skipped": skipped}
 
-    def delete(self, job_id: str) -> bool:
+    def delete(self, job_id: str, files: bool = True) -> bool:
+        """Smaže zakázku. files=True (výchozí) smaže i všechny soubory na disku
+        (vstup, výstupy, log, temp). files=False jen odebere záznam ze seznamu a
+        uklidí dočasná data — hotové výstupy (video/audio/titulky) na disku nechá."""
         with self._lock:
             job = self.get(job_id)
             if not job:
                 return False
-            for p in (job.upload_path, job.log_path, job.output_video,
-                      job.output_audio, job.output_srt_src,
-                      job.output_srt_tgt, job.output_json):
-                if p:
-                    try:
-                        Path(p).unlink(missing_ok=True)
-                    except Exception:
-                        pass
-            # smaž dočasný work adresář (TTS klipy, zarovnané WAV, apod.)
+            if files:
+                for p in (job.upload_path, job.log_path, job.output_video,
+                          job.output_audio, job.output_srt_src,
+                          job.output_srt_tgt, job.output_json):
+                    if p:
+                        try:
+                            Path(p).unlink(missing_ok=True)
+                        except Exception:
+                            pass
+            # dočasný work adresář (TTS klipy, zarovnané WAV, …) je vždy jen balast
             work_dir = config.WORK_DIR / job_id
             try:
                 shutil.rmtree(work_dir, ignore_errors=True)

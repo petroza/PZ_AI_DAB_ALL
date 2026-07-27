@@ -344,6 +344,19 @@ select:focus, input:focus, textarea:focus { border-color: var(--srt); box-shadow
 .dlbtn, .lnk { padding: 6px 9px; border: 1px solid var(--hair); border-radius: 7px; background: var(--surface2); color: var(--ink); font-size: 10px; text-decoration: none; cursor: pointer; }
 .lnk { border-color: transparent; background: transparent; color: var(--dim); }
 .dlbtn:hover { border-color: var(--srt); color: var(--srt-bright); } .lnk:hover { background: var(--surface2); color: var(--ink); } .lnk.del:hover { color: var(--bad); }
+.dlbtn svg, .lnk svg { width: 12px; height: 12px; vertical-align: -2px; margin-right: 2px; }
+.dlbtn.play { border-color: rgba(120,220,150,.5); color: var(--new, #7ee0a0); font-weight: 600; }
+.dlbtn.play:hover { border-color: var(--new, #7ee0a0); background: rgba(120,220,150,.12); color: var(--new, #7ee0a0); }
+.lnk.del.hard:hover { color: var(--bad); background: rgba(240,90,90,.12); }
+
+/* přehrávač videa = vycentrovaný modal */
+.vidbox {
+  position: fixed; z-index: 60; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; width: min(900px, 94vw); max-height: 92vh;
+  overflow: hidden; border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--surface); box-shadow: 0 30px 90px rgba(0,0,0,.6);
+}
+.vidplayer { display: block; width: 100%; max-height: calc(92vh - 46px); background: #000; }
 .foot { margin-left: var(--side-w); padding: 18px; border-top: 1px solid var(--hair); color: var(--faint); font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-align: center; }
 
 .logbox, .aebox { position: fixed; z-index: 50; right: 20px; bottom: 20px; left: calc(var(--side-w) + 20px); display: flex; max-height: 55vh; flex-direction: column; overflow: hidden; border: 1px solid var(--hair); border-radius: var(--r); background: var(--surface); box-shadow: 0 22px 70px rgba(0,0,0,.55); }

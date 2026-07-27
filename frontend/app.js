@@ -540,6 +540,7 @@ function jobCard(j) {
   const running = !["done", "error", "review"].includes(j.status);
   let outs = "";
   if (j.status === "done") {
+    if (j.output_video) outs += `<button class="dlbtn play" data-action="play" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}"><i data-lucide="play"></i> Přehrát</button>`;
     if (j.output_video) outs += dl(j.id, "video", "⬇ Video");
     if (j.output_audio) outs += dl(j.id, "audio", "⬇ Audio");
     if (j.output_srt_tgt) outs += dl(j.id, "srt_tgt", "⬇ Titulky (cíl)");
@@ -563,7 +564,8 @@ function jobCard(j) {
       ${outs}
       ${j.status === "review" ? `<button class="dlbtn" data-action="edit" data-id="${escHtml(j.id)}">✏️ Upravit titulky</button>` : ""}
       <button class="lnk" data-action="log" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}">Log</button>
-      <button class="lnk del" data-action="del" data-id="${escHtml(j.id)}">Smazat</button>
+      <button class="lnk del" data-action="del" data-id="${escHtml(j.id)}" title="Odebrat ze seznamu (soubory na disku zůstanou)">Smazat</button>
+      <button class="lnk del hard" data-action="delfiles" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}" title="Smazat zakázku i všechny její soubory z disku"><i data-lucide="trash-2"></i> Z disku</button>
     </div>
   </div>`;
 }
@@ -702,12 +704,38 @@ async function showLog(id, name) {
 }
 
 async function delJob(id) {
-  if (!confirm("Opravdu smazat tuto zakázku?")) return;
+  // Jen odebrat ze seznamu — výstupní soubory na disku zůstanou.
   try {
-    const r = await fetch(api("/api/jobs/" + id), { method: "DELETE" });
+    const r = await fetch(api("/api/jobs/" + id + "?files=false"), { method: "DELETE" });
     if (!r.ok) { alert("Smazání selhalo (" + r.status + ")."); return; }
   } catch (e) { alert("Chyba spojení: " + e); return; }
-  refresh();
+  _lastJobsJson = ""; refresh();
+}
+
+async function delJobFiles(id, fn) {
+  if (!confirm("Smazat zakázku „" + (fn || id) + "\" i se všemi soubory z disku?\n" +
+               "(Výstupní video, audio i titulky budou nenávratně odstraněny.)")) return;
+  try {
+    const r = await fetch(api("/api/jobs/" + id + "?files=true"), { method: "DELETE" });
+    if (!r.ok) { alert("Smazání selhalo (" + r.status + ")."); return; }
+  } catch (e) { alert("Chyba spojení: " + e); return; }
+  _lastJobsJson = ""; refresh();
+}
+
+function playVideo(id, fn) {
+  const box = $("vidbox"), player = $("vidplayer");
+  if (!box || !player) return;
+  $("vid-name").textContent = fn || "";
+  player.src = api("/api/play/" + id);
+  box.classList.remove("hidden"); $("vidbackdrop").classList.remove("hidden");
+  player.play().catch(() => {});
+}
+
+function closeVideo() {
+  const box = $("vidbox"), player = $("vidplayer");
+  if (player) { try { player.pause(); } catch (_) {} player.removeAttribute("src"); player.load(); }
+  if (box) box.classList.add("hidden");
+  const bd = $("vidbackdrop"); if (bd) bd.classList.add("hidden");
 }
 
 async function clearQueue(scope) {
@@ -737,7 +765,9 @@ $("jobs").addEventListener("click", (e) => {
   if (!btn) return;
   const { action, id, fn } = btn.dataset;
   if (action === "log") showLog(id, fn);
+  else if (action === "play") playVideo(id, fn);
   else if (action === "del") delJob(id);
+  else if (action === "delfiles") delJobFiles(id, fn);
   else if (action === "burnedit") openBurnEditor(id, fn, "done");
   else if (action === "edit") openSubEditor(id);
 });
@@ -853,6 +883,9 @@ $("target_lang").addEventListener("change", () => { $("voice").value = ""; _fill
 $("logclose").addEventListener("click", () => { _logStop(); $("logbox").classList.add("hidden"); });
 $("aeclose").addEventListener("click", _edClose);
 $("aebackdrop").addEventListener("click", _edClose);
+{ const vc = $("vidclose"), vb = $("vidbackdrop");
+  if (vc) vc.addEventListener("click", closeVideo);
+  if (vb) vb.addEventListener("click", closeVideo); }
 function _edClose() { $("aebox").classList.add("hidden"); $("aebackdrop").classList.add("hidden"); }
 
 // --- okno editoru: zvětšování tahem (CSS resize) + posun za lištu + paměť ---
