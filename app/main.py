@@ -375,17 +375,33 @@ class SegmentsRequest(BaseModel):
     start: bool = False        # True = rovnou pokračovat dabingem
 
 
+def _segments_from_srt(job) -> list:
+    """Rekonstruuj segmenty z hotových SRT výstupů (pro editaci dokončené zakázky,
+    která nemá uložený segments.json). Cílový SRT dá text, zdrojový (když je) src."""
+    if not job.output_srt_tgt or not Path(job.output_srt_tgt).is_file():
+        return []
+    tgt = pipeline._parse_srt(job.output_srt_tgt)
+    src = (pipeline._parse_srt(job.output_srt_src)
+           if job.output_srt_src and Path(job.output_srt_src).is_file() else [])
+    for i, s in enumerate(tgt):
+        s["src"] = (src[i]["text"] if i < len(src) else "")
+    return tgt
+
+
 @app.get("/api/segments/{job_id}")
 def api_get_segments(job_id: str) -> dict:
-    """Segmenty k úpravě (po fázi analýzy)."""
+    """Segmenty k úpravě (po fázi analýzy nebo u dokončené zakázky z jejích SRT)."""
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job neexistuje.")
     p = _segments_path(job_id)
-    if not p.is_file():
-        raise HTTPException(404, "Segmenty zatím nejsou připravené.")
-    return {"job_id": job_id, "status": job.status,
-            "segments": json.loads(p.read_text(encoding="utf-8"))}
+    if p.is_file():
+        segs = json.loads(p.read_text(encoding="utf-8"))
+    else:
+        segs = _segments_from_srt(job)
+        if not segs:
+            raise HTTPException(404, "Segmenty zatím nejsou připravené.")
+    return {"job_id": job_id, "status": job.status, "segments": segs}
 
 
 @app.post("/api/segments/{job_id}")

@@ -91,8 +91,10 @@ async function loadStatus() {
     $("status").textContent = location.hostname === "127.0.0.1" ? "localhost" : location.hostname;
     $("status").classList.add("bad");
     $("status").title = msg.replace(/<[^>]+>/g, "");
+    _setWorkerOnline(false);
     return;
   }
+  _setWorkerOnline(true);
   fillSelect($("source_lang"), s.source_languages, s.defaults.source);
   fillSelect($("target_lang"), s.target_languages, s.defaults.target);
   if (!loadStatus.defaultsApplied) {
@@ -545,7 +547,8 @@ function jobCard(j) {
     if (j.output_audio) outs += dl(j.id, "audio", "⬇ Audio");
     if (j.output_srt_tgt) outs += dl(j.id, "srt_tgt", "⬇ Titulky (cíl)");
     if (j.output_srt_src) outs += dl(j.id, "srt_src", "⬇ Titulky (zdroj)");
-    if (j.output_video && j.output_srt_tgt) outs += `<button class="dlbtn" data-action="burnedit" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}"><i data-lucide="subtitles"></i> Titulky</button>`;
+    if (j.output_srt_tgt) outs += `<button class="dlbtn" data-action="edit" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}"><i data-lucide="pencil"></i> Edit titulky</button>`;
+    if (j.output_video && j.output_srt_tgt) outs += `<button class="dlbtn" data-action="burnedit" data-id="${escHtml(j.id)}" data-fn="${escHtml(j.filename)}"><i data-lucide="subtitles"></i> Styl titulků</button>`;
   }
   const err = j.error ? `<div class="err">${escHtml(j.error)}</div>` : "";
   const dir = (LANG[j.source_lang] || j.source_lang) + " → " + (LANG[j.target_lang] || j.target_lang);
@@ -581,6 +584,29 @@ function _updateJobsBadge() {
   const n = _lastJobs.length;
   badge.textContent = n;
   badge.classList.toggle("hidden", n === 0);
+}
+
+// Indikátor workeru v levém panelu (zelená = běží).
+function _setWorkerOnline(ok) {
+  const dot = $("worker-dot");
+  if (dot) {
+    dot.textContent = ok ? "● online" : "● offline";
+    dot.classList.toggle("ok", !!ok);
+  }
+  const url = $("worker-url");
+  if (url) url.textContent = (API_BASE || (location.host || "127.0.0.1:8790")).replace(/^https?:\/\//, "");
+}
+
+// Statistické dlaždice (nahoře) + worker box – dopočítané z fronty zakázek.
+function _updateStats() {
+  const j = _lastJobs || [];
+  const run   = j.filter(x => !["done", "error", "review", "queued"].includes(x.status)).length;
+  const queue = j.filter(x => x.status === "queued").length;
+  const done  = j.filter(x => x.status === "done").length;
+  const err   = j.filter(x => x.status === "error").length;
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set("st-run", run); set("st-queue", queue); set("st-done", done); set("st-err", err);
+  set("w-run", run);  set("w-queue", queue); set("w-total", j.length);
 }
 
 function _setActiveNav(btn) {
@@ -634,11 +660,13 @@ document.querySelectorAll(".side-nav .navi").forEach(btn => {
 
 async function refresh() {
   let data;
-  try { data = await jget(api("/api/jobs")); } catch { return false; }
+  try { data = await jget(api("/api/jobs")); } catch { _setWorkerOnline(false); return false; }
+  _setWorkerOnline(true);
   const sig = JSON.stringify(data.jobs.map(j => [j.id, j.status, j.progress, j.error, j.duration, j.segments_count]));
   const hasRunning = data.jobs.some(j => !["done", "error", "review"].includes(j.status));
   _lastJobs = data.jobs;
   _updateJobsBadge();
+  _updateStats();
   if (!hasRunning && sig === _lastJobsJson) return false;
   _lastJobsJson = sig;
   const box = $("jobs");
@@ -776,14 +804,14 @@ $("jobs").addEventListener("click", (e) => {
 // --- editor titulků (fáze "upravit text před dabingem") -------------------
 // Job se po analýze zastaví ve stavu "review". Tady se dají opravit texty
 // i časy, stáhnout SRT, a teprve pak pustit dabing / zapékání.
-let _edId = null, _edSegs = [];
+let _edId = null, _edSegs = [], _edStatus = "";
 
 async function openSubEditor(id) {
   try {
     const d = await jget(api("/api/segments/" + id));
-    _edId = id; _edSegs = d.segments || [];
+    _edId = id; _edSegs = d.segments || []; _edStatus = d.status || "";
   } catch {
-    _setPicked("Segmenty se nepodařilo načíst.", true); return;
+    _setPicked("Titulky se nepodařilo načíst.", true); return;
   }
   $("sub-rows").innerHTML = _edSegs.map((s, i) => `
     <div class="sub-row">
@@ -795,6 +823,9 @@ async function openSubEditor(id) {
       ${s.src ? `<div class="sub-src" title="originál">${escHtml(s.src)}</div>` : ""}
     </div>`).join("");
   $("sub-count").textContent = _edSegs.length + " titulků";
+  const go = $("sub-go");
+  if (go) go.textContent = (_edStatus === "done")
+    ? "▶ Přegenerovat video" : "▶ Pokračovat dabingem";
   $("submodal").classList.remove("hidden");
 }
 
