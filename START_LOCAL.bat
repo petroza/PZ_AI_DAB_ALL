@@ -2,6 +2,13 @@
 chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
+title PZ AI DAB ALL - LOKALNI (tento PC + Wi-Fi)
+
+REM ============================================================
+REM  LOKALNI rezim: aplikace bezi na tomto PC (web na :8790) + XTTS.
+REM  Otevres v prohlizeci na PC nebo z mobilu ve stejne Wi-Fi.
+REM  Pro dabing z mobilu odkudkoliv pouzij START_ONLINE.bat.
+REM ============================================================
 
 set "PYTHON=.venv\Scripts\python.exe"
 if not exist "%PYTHON%" (
