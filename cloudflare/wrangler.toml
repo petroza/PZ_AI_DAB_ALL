@@ -1,0 +1,33 @@
+name = "pz-ai-dab-all"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+# --- D1 (metadata zakázek) ---
+[[d1_databases]]
+binding = "DB"
+database_name = "pz_dab"
+database_id = "bcf1ab56-e90d-4f0e-940f-7daf2af40858"    # vyplní `wrangler d1 create pz_dab`
+
+# --- R2 (soubory: vstupní videa + výstupy) ---
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "pz-dab-files"
+
+# Preview deployy (větve) – použijí stejnou DB i bucket. Můžeš smazat, když
+# nasazuješ jen produkci.
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "pz_dab"
+database_id = "bcf1ab56-e90d-4f0e-940f-7daf2af40858"
+
+[[env.preview.r2_buckets]]
+binding = "R2"
+bucket_name = "pz-dab-files"
+
+# Secrety (NEuváděj sem hodnoty!) – nastav přes:
+#   wrangler pages secret put WORKER_TOKEN
+#   wrangler pages secret put UI_PASSWORD
+#   wrangler pages secret put SESSION_SECRET
+# WORKER_TOKEN   = musí být STEJNÝ jako worker_token ve worker_config.json na PC
+# UI_PASSWORD    = heslo do mobilní stránky
+# SESSION_SECRET = náhodný dlouhý řetězec (podpis přihlašovací cookie)

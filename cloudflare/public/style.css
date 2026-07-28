@@ -1,0 +1,216 @@
+:root{
+  /* tmavé MODRÉ téma – hranaté a přesné */
+  --ground:#080C18; --surface:#0F1729; --surface2:#172138; --hair:#283656;
+  --ink:#E9EEFA; --dim:#93A4C8; --faint:#56688E;
+  --srt:#4D9CFF; --voice:#F0A93C; --new:#3B82F6; --bad:#F0635A;
+  --go-text:#FFFFFF; --bar-bg:#0A1326; --log-bg:#070D1C;
+  --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+[data-theme="light"]{
+  --ground:#EEF2FB; --surface:#FFFFFF; --surface2:#E6ECF8; --hair:#C2CEE6;
+  --ink:#101A2E; --dim:#41527A; --faint:#6C7DA3;
+  --srt:#2563EB; --voice:#B5710A; --new:#2563EB; --bad:#D43A30;
+  --go-text:#FFFFFF; --bar-bg:#D4DCEF; --log-bg:#16213A;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.5}
+a{color:var(--srt)}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px 22px;border-bottom:1px solid var(--hair);background:var(--surface);
+  position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.top-right{display:flex;align-items:center;gap:10px}
+.theme-btn{background:none;border:1px solid var(--hair);border-radius:4px;
+  padding:5px 8px;font-size:.95rem;line-height:1;cursor:pointer;color:var(--dim);
+  transition:border-color .15s,color .15s;flex-shrink:0}
+.theme-btn:hover{border-color:var(--srt);color:var(--srt)}
+.brand{font-family:var(--mono);font-size:1.05rem;letter-spacing:.02em}
+.brand b{color:var(--new)} .logo{margin-right:4px}
+.status{font-family:var(--mono);font-size:.78rem;color:var(--dim)}
+.status .ok{color:var(--new)} .status .bad{color:var(--bad)}
+
+main{max-width:900px;margin:0 auto;padding:24px 22px 80px;display:flex;flex-direction:column;gap:20px}
+.panel{background:var(--surface);border:1px solid var(--hair);border-radius:5px;padding:20px}
+.panel h2{margin:0 0 16px;font-size:1.05rem;font-weight:600;
+  font-family:var(--mono);color:var(--dim);letter-spacing:.04em}
+
+.drop{border:1.5px dashed var(--hair);border-radius:5px;padding:34px 18px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s;background:rgba(255,255,255,.012)}
+.drop:hover,.drop.over{border-color:var(--srt);background:rgba(77,156,255,.07)}
+.drop-main{font-size:1.05rem;margin:0 0 6px}
+.drop-sub{color:var(--dim);font-size:.82rem;margin:0}
+.picked{color:var(--new);font-family:var(--mono);font-size:.85rem;margin:12px 0 0;min-height:1em;overflow-wrap:anywhere;word-break:break-word}
+.picked.err{color:var(--bad)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+label{display:flex;flex-direction:column;gap:6px;font-size:.82rem;color:var(--dim);min-width:0}
+.hint{color:var(--faint);font-weight:400}
+select,input[type=text],input[type=number]{background:var(--surface2);color:var(--ink);border:1px solid var(--hair);
+  border-radius:4px;padding:9px 10px;font-family:var(--sans);font-size:.92rem;
+  width:100%;max-width:100%;min-width:0}
+/* dlouhý text ve <select> nesmí roztáhnout stránku na mobilu (ořízne se) */
+select{text-overflow:ellipsis}
+select:focus,input:focus{outline:2px solid var(--srt);outline-offset:0;border-color:var(--srt)}
+
+.row{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;align-items:flex-start}
+.seg{border:1px solid var(--hair);border-radius:4px;padding:8px 14px 12px;margin:0;flex:1 1 280px;min-width:0}
+.seg legend{font-size:.74rem;color:var(--faint);font-family:var(--mono);padding:0 6px}
+.rad,.chk{display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-size:.88rem;color:var(--ink);margin-top:6px;cursor:pointer}
+.rad input,.chk input{margin-top:.2em;flex-shrink:0}
+.checks{display:flex;flex-direction:column;gap:6px;justify-content:center}
+
+.go{margin-top:18px;width:100%;background:var(--new);color:var(--go-text);border:none;border-radius:4px;
+  padding:13px;font-size:1rem;font-weight:700;cursor:pointer;font-family:var(--mono);letter-spacing:.03em}
+.go:disabled{background:var(--surface2);color:var(--faint);cursor:not-allowed}
+.go:not(:disabled):hover{filter:brightness(1.07)}
+.formhint{color:var(--voice);font-size:.82rem;margin:10px 0 0;min-height:1em}
+
+.jobs{display:flex;flex-direction:column;gap:12px}
+.empty{color:var(--faint);font-style:italic}
+.job{background:var(--surface2);border:1px solid var(--hair);border-radius:5px;padding:14px 16px}
+.job.error{border-color:rgba(240,99,90,.5)}
+.job.done{border-color:rgba(59,130,246,.42)}
+.jhead{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.jname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}
+.jstat{font-family:var(--mono);font-size:.8rem;color:var(--srt);white-space:nowrap}
+.job.done .jstat{color:var(--new)} .job.error .jstat{color:var(--bad)}
+.jmeta{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin:4px 0 10px}
+.bar{height:6px;background:var(--bar-bg);border-radius:2px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,var(--srt),var(--new));transition:width .4s;border-radius:2px}
+.job.error .fill{background:var(--bad)}
+.err{color:var(--bad);font-size:.82rem;margin-top:8px;font-family:var(--mono);word-break:break-word}
+.jactions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+.dlbtn{background:var(--surface);border:1px solid var(--hair);border-radius:3px;padding:6px 11px;
+  font-size:.8rem;text-decoration:none;color:var(--ink)}
+.dlbtn:hover{border-color:var(--srt);color:var(--srt)}
+.lnk{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.8rem;padding:6px 4px}
+.lnk:hover{color:var(--ink)} .lnk.del:hover{color:var(--bad)}
+/* dodatečné zapečení titulků u hotové zakázky */
+.rb{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rb-preset{width:auto;min-width:0;padding:6px 8px;font-size:.8rem}
+
+.logbox{position:fixed;inset:auto 0 0 0;max-height:46vh;background:var(--log-bg);border-top:1px solid var(--hair);
+  display:flex;flex-direction:column;z-index:20}
+.logbox.hidden{display:none}
+.logbar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;
+  border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:.82rem;color:var(--dim)}
+.logbar button{background:none;border:none;color:var(--dim);font-size:1rem;cursor:pointer}
+#logtext{margin:0;padding:12px 16px;overflow:auto;flex:1;min-height:0;font-family:var(--mono);font-size:.78rem;
+  color:var(--dim);white-space:pre-wrap;word-break:break-word}
+.aebox{position:fixed;inset:auto 0 0 0;background:var(--surface);border-top:2px solid var(--voice);
+  display:flex;flex-direction:column;z-index:21;max-width:680px;margin:0 auto;
+  border-radius:5px 14px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.3)}
+.aebox.hidden{display:none}
+.aebody{padding:14px 20px 22px;overflow-y:auto;max-height:70vh}
+.aegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+
+@media (max-width:560px){
+  html,body{overflow-x:hidden}              /* žádné vodorovné přetékání stránky */
+  main{padding:16px 12px 70px;gap:16px}
+  .panel{padding:14px 13px}
+  .top{padding:11px 14px;gap:10px}
+  .panel h2{font-size:1rem;margin-bottom:13px}
+  .jstat{font-size:.72rem}
+  .brand{font-size:.95rem}
+  select,input[type=text],input[type=number]{padding:11px 10px;font-size:1rem}
+  .dlbtn{padding:10px 14px;font-size:.86rem}
+  .lnk{padding:10px 6px}
+  .rad,.chk{font-size:.94rem;gap:10px}
+  .checks{flex-direction:row;flex-wrap:wrap;gap:12px 18px}
+  .row{gap:14px}
+  .jhead{flex-wrap:wrap;gap:4px 12px}        /* dlouhý název souboru se zalomí */
+  .jname{white-space:normal;overflow-wrap:anywhere;word-break:break-word;flex-basis:100%}
+  .drop{padding:24px 14px}
+}
+
+/* ---- editor textu před dabingem (modal) ---- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:50;padding:14px}
+.modal.hidden{display:none}
+.modal-box{background:var(--surface);border:1px solid var(--hair);border-radius:5px;width:min(760px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--hair)}
+.modal-head b{color:var(--ink);font-size:1.02rem}
+.modal-sub{color:var(--dim);font-size:.82rem;padding:9px 16px 2px}
+.ed-segs{overflow-y:auto;padding:6px 16px;flex:1}
+.ed-seg{border-bottom:1px solid var(--hair);padding:9px 0}
+.ed-tc{color:var(--faint);font-size:.72rem;font-family:var(--mono)}
+.ed-src{color:var(--dim);font-size:.8rem;margin:3px 0 5px;font-style:italic}
+.ed-seg textarea{width:100%;background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:4px;padding:8px;font:inherit;font-size:.92rem;line-height:1.4;resize:vertical;min-height:40px;box-sizing:border-box}
+.ed-seg textarea:focus{border-color:var(--srt);outline:none}
+.modal-foot{display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--hair)}
+.modal-foot .go{margin-top:0;width:auto;padding:11px 20px}
+.ed-status{color:var(--dim);font-size:.8rem;margin-right:auto}
+.job.review .jstat,.badge-review{color:var(--voice)}
+
+/* ---- živý editor titulků na videu ---- */
+.modal-box.ed-wide{width:min(640px,100%)}
+.ed-video-wrap{position:relative;background:#000;margin:12px 16px 0;border-radius:4px;overflow:hidden}
+#ed-video{width:100%;max-height:46vh;display:block;background:#000}
+.ed-overlay{position:absolute;left:5%;right:5%;bottom:7%;text-align:center;color:#fff;
+  font-weight:800;font-size:clamp(15px,4.4vw,30px);line-height:1.16;white-space:pre-wrap;
+  letter-spacing:.2px;text-shadow:0 0 3px #000,0 2px 5px #000,0 0 9px #000,1px 1px 0 #000;
+  cursor:pointer;word-break:break-word}
+.ed-overlay:empty{display:none}
+.ed-seg.active{background:var(--surface2);border-radius:4px;padding-left:8px;padding-right:8px}
+.ed-seg.active .ed-tc{color:var(--voice)}
+.ed-seg.active textarea{border-color:var(--voice)}
+.ed-tc{cursor:pointer}
+.ed-tc:hover{color:var(--srt)}
+
+/* ---- timeline + editace přímo v obraze ---- */
+.ed-timeline{display:flex;align-items:center;gap:10px;margin:10px 16px 0}
+.ed-play{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:4px;
+  width:36px;height:36px;min-width:36px;cursor:pointer;font-size:13px;line-height:1;display:flex;
+  align-items:center;justify-content:center}
+.ed-play:hover{border-color:var(--srt);color:var(--srt)}
+.ed-time{font-family:var(--mono);font-size:.74rem;color:var(--dim);min-width:92px;flex-shrink:0}
+.ed-track{position:relative;flex:1;height:28px;background:var(--bar-bg);border-radius:3px;cursor:pointer;overflow:hidden}
+.ed-markers{position:absolute;inset:0}
+.ed-marker{position:absolute;top:7px;height:14px;background:var(--srt);opacity:.45;border-radius:2px;min-width:2px}
+.ed-marker.active{opacity:1;background:var(--voice)}
+.ed-playhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 5px #000,0 0 2px #000;pointer-events:none;left:0}
+.ed-overlay{user-select:none}
+.ed-overlay[contenteditable="true"]{user-select:text;outline:2px dashed var(--voice);
+  background:rgba(0,0,0,.30);border-radius:4px;padding:2px 10px;cursor:text}
+
+/* ---- editor video-centric (bez seznamu) ---- */
+#ed-video{max-height:58vh}
+.ed-counter{margin-left:auto;margin-right:12px;font-family:var(--mono);font-size:.76rem;color:var(--dim);white-space:nowrap}
+.ed-srchint{position:absolute;left:5%;right:5%;top:5%;text-align:center;color:rgba(255,255,255,.72);
+  font-size:clamp(11px,2.3vw,15px);font-style:italic;text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none}
+.ed-srchint:empty{display:none}
+.ed-overlay{bottom:9%;font-size:clamp(14px,3.6vw,26px)}
+
+/* ---- ukazatel délky titulku + font dle šířky videa ---- */
+#ed-overlay{font-size:22px}   /* výchozí; JS přepočítá dle šířky videa */
+.ed-len{position:absolute;top:8px;right:10px;background:rgba(0,0,0,.55);color:#dfe9e9;
+  font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:3px;pointer-events:none;letter-spacing:.2px}
+.ed-len:empty{display:none}
+.ed-len.warn{background:rgba(210,70,50,.9);color:#fff}
+
+/* ---- ovládání editoru: znaků/řádek, řádky, SRT ---- */
+.ed-controls{display:flex;align-items:center;gap:14px;margin:9px 16px 0;flex-wrap:wrap}
+.ed-controls>label{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--dim)}
+.ed-controls select{background:var(--ground);color:var(--ink);border:1px solid var(--hair);border-radius:3px;padding:4px 7px;font:inherit;font-size:.82rem}
+.ed-lines-toggle{display:flex;align-items:center;gap:5px;font-size:.82rem;color:var(--dim)}
+.ed-lbtn{background:var(--surface2);border:1px solid var(--hair);color:var(--ink);border-radius:3px;width:30px;height:28px;cursor:pointer;font-weight:600}
+.ed-lbtn.active{background:var(--srt);color:#04201f;border-color:var(--srt)}
+#ed-srt{margin-left:auto}
+
+/* ---- overlay centrovaný (max-width řídí JS dle velikosti+znaků) ---- */
+.ed-overlay{left:50%!important;right:auto!important;transform:translateX(-50%);margin:0 auto}
+
+/* ---- formulář „Nastavení dabingu": čistší zarovnání ---- */
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-voice{grid-template-columns:minmax(160px,1fr) minmax(220px,2fr)}
+.grid + .grid{margin-top:14px}
+.row{align-items:stretch}          /* oba boxy stejně vysoké */
+.row .seg{flex:1 1 300px}
+#preset-wrap{display:block;margin-top:8px}
+#preset-wrap.hidden{display:none}
+#preset-wrap select{margin-top:5px;width:100%}
+@media (max-width:600px){
+  .grid-3,.grid-voice{grid-template-columns:1fr}
+}
+
+.cap{display:block;white-space:nowrap}   /* hlavička „Hlas (volitelné)" na jeden řádek = zarovnání s enginem */

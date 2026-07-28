@@ -10,10 +10,16 @@ work/
 # Secrety a lokální konfigurace (necommitovat!)
 .htpasswd
 worker_config.json
+*.bak.json
 NASTAV_HESLO_ALLDUB.*
 prikaldy/
 web/config.php
 web/data/
+
+# Cloudflare relay – lokální stav a secrety
+cloudflare/.wrangler/
+cloudflare/.dev.vars
+cloudflare/node_modules/
 
 # Zálohy a velká média (ukázky se stahují zvlášť)
 *.bak

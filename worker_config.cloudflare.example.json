@@ -1,0 +1,6 @@
+{
+  "base_url": "https://pz-ai-dab-all.pages.dev",
+  "worker_token": "STEJNY_JAKO_WORKER_TOKEN_SECRET_NA_CLOUDFLARE",
+  "poll_interval_sec": 5,
+  "deepl_key": ""
+}

@@ -29,6 +29,10 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+# Zajisti import balíku `app` i pod embeddable Pythonem (runtime), který
+# adresář skriptu do sys.path automaticky nepřidává.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from app import config as appcfg, pipeline
 from app.job_manager import JobManager
 
